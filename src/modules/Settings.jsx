@@ -12,6 +12,7 @@ export default function Settings({ uid, settings, user, onSignOut }) {
   const [d, setD] = useState(settings);
   const [saved, setSaved] = useState('');
   const [msg, setMsg] = useState('');
+  const [keyMsg, setKeyMsg] = useState('');
   useEffect(() => setD(settings), [settings]);
 
   const up = (path, v) => setD(prev => {
@@ -110,6 +111,11 @@ export default function Settings({ uid, settings, user, onSignOut }) {
         <Field label="API key (stored privately in your account)"><input type="password" value={d.geminiKey || ''} onChange={e => up(['geminiKey'], e.target.value.trim())} placeholder="Paste key from aistudio.google.com/apikey" /></Field>
         <div style={{ height: 8 }} />
         <Field label="Model"><input value={d.geminiModel} onChange={e => up(['geminiModel'], e.target.value.trim())} /></Field>
+        <div className="row" style={{ marginTop: 10 }}>
+          <button className="ok" onClick={async () => { await saveSettings(uid, { geminiKey: (d.geminiKey || '').trim(), geminiModel: d.geminiModel }); setKeyMsg('Saved ✓'); setTimeout(() => setKeyMsg(''), 2500); }}>Save key</button>
+          <span className="g">{keyMsg}</span>
+          <span className="dim" style={{ fontSize: 12 }}>{settings.geminiKey ? 'A key is stored in your account.' : 'No key stored yet.'}</span>
+        </div>
       </div>
 
       <div className="card">
