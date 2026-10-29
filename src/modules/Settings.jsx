@@ -175,7 +175,7 @@ export default function Settings({ uid, settings, user, onSignOut }) {
       <div className="card">
         <h3 style={{ marginBottom: 8 }}>Import Health Data Export</h3>
         <div className="dim" style={{ fontSize: 13, marginBottom: 8 }}>In the Google Sheet: File → Download → CSV, one tab at a time ("Body Measurements" and "Activity"). Then choose the files here. Scale weight and body fat, plus daily steps, are added. Safe to repeat.</div>
-        <input type="file" accept=".csv,text/csv" multiple onChange={importHealth} />
+        <input type="file" multiple onChange={importHealth} />
       </div>
 
       <div className="card">

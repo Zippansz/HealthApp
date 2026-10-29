@@ -88,7 +88,7 @@ export default function Training({ uid, settings }) {
       <div className="card">
         <h3 style={{ marginBottom: 8 }}>Import from Hevy</h3>
         <div className="dim" style={{ fontSize: 13, marginBottom: 8 }}>Choose one or more exported CSV files. Re-importing is safe: the same workout is never added twice.</div>
-        <input type="file" accept=".csv,text/csv" multiple onChange={onFiles} disabled={busy} />
+        <input type="file" multiple onChange={onFiles} disabled={busy} />
         {busy && <div className="mute">Importing…</div>}{msg && <div className="msg">{msg}</div>}
       </div>
 
