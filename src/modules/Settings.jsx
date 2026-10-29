@@ -4,6 +4,7 @@ import { DEFAULTS } from '../lib/defaults';
 import { downloadFile, todayStr, num } from '../lib/calc';
 import { parseCSV, toCSV } from '../lib/csv';
 import { TAPE } from '../lib/tape';
+import { importHealthCSV, syncSheets } from '../lib/health';
 
 const Field = ({ label, children }) => <label style={{ display: 'block' }}><div className="lbl" style={{ marginBottom: 3 }}>{label}</div>{children}</label>;
 const N = ({ v, set }) => <input inputMode="decimal" value={v ?? ''} onChange={e => set(e.target.value === '' ? '' : e.target.value)} />;
@@ -64,35 +65,22 @@ export default function Settings({ uid, settings, user, onSignOut }) {
     }
   };
 
-  // ---------- Health Data Export CSV (Google Sheet tabs downloaded as CSV) ----------
+  // ---------- Health Data Export (file fallback + automatic sheet sync) ----------
   const importHealth = async e => {
     setMsg('');
     for (const f of e.target.files) {
-      const { head, rows } = parseCSV(await f.text());
-      const byDay = {};
-      if (head.includes('Weight (kg)')) {            // "Body Measurements" tab: one scale reading per row
-        rows.sort((a, b) => a['Date/Time'].localeCompare(b['Date/Time'])).forEach(r => {
-          const date = r['Date/Time'].slice(0, 10); const w = num(r['Weight (kg)']);
-          if (!w || byDay[date]) return;               // first (morning) reading of each day
-          byDay[date] = { date, weight: w }; const bf = num(r['Body Fat (%)']); if (bf) byDay[date].bf = bf;
-        });
-        await putMany(uid, 'measurements', Object.values(byDay).map(x => ({ id: x.date, data: x })));
-        setMsg(m => m + `${f.name}: ${Object.keys(byDay).length} weigh-in days imported. `);
-      } else if (head.includes('Steps')) {            // "Activity" tab: one row per source / exercise
-        const seen = new Set();
-        rows.forEach(r => {
-          const date = r.Date; if (!date) return;
-          const o = (byDay[date] ||= { date, steps: 0, kcal: 0 });
-          o.steps = Math.max(o.steps, num(r.Steps) || 0);   // phone + Fitbit both report steps: take the larger, don't add
-          const k = `${r['Start Date/Time']}|${r['Exercise Name']}`;
-          if (r['Exercise Name'] && !seen.has(k)) { seen.add(k); o.kcal += num(r['Exercise Calories (kcal)']) || 0; }
-        });
-        const items = Object.values(byDay).map(x => { const o = { date: x.date, steps: x.steps }; if (x.kcal > 0) o.kcal = x.kcal; return { id: x.date, data: o }; });
-        await putMany(uid, 'activity', items);
-        setMsg(m => m + `${f.name}: ${items.length} activity days imported. `);
-      } else setMsg(m => m + `${f.name}: not recognised (expected the Body Measurements or Activity tab). `);
+      try { const r = await importHealthCSV(uid, await f.text()); setMsg(m => m + `${f.name}: ${r.count} ${r.kind} imported. `); }
+      catch (err) { setMsg(m => m + `${f.name}: ${err.message} `); }
     }
     e.target.value = '';
+  };
+  const [sheet, setSheet] = useState({ body: settings.sheetBody || '', act: settings.sheetActivity || '' });
+  const [syncing, setSyncing] = useState(false);
+  const syncNow = async () => {
+    setSyncing(true);
+    await saveSettings(uid, { sheetBody: sheet.body.trim(), sheetActivity: sheet.act.trim(), lastSync: null });
+    await syncSheets(uid, { ...settings, sheetBody: sheet.body.trim(), sheetActivity: sheet.act.trim(), lastSync: null });
+    setSyncing(false);
   };
 
   return (
@@ -168,9 +156,16 @@ export default function Settings({ uid, settings, user, onSignOut }) {
       <div className="row" style={{ marginBottom: 12 }}><button className="ok" onClick={save}>Save settings</button><span className="g">{saved}</span></div>
 
       <div className="card">
-        <h3 style={{ marginBottom: 8 }}>Import Health Data Export</h3>
-        <div className="dim" style={{ fontSize: 13, marginBottom: 8 }}>In the Google Sheet: File → Download → CSV, one tab at a time ("Body Measurements" and "Activity"). Then choose the files here. Scale weight and body fat, plus daily steps, are added. Safe to repeat.</div>
-        <input type="file" multiple onChange={importHealth} />
+        <h3 style={{ marginBottom: 8 }}>Health Data Export sync</h3>
+        <div className="dim" style={{ fontSize: 13, marginBottom: 8 }}>In your Google Sheet: File → Share → Publish to web → choose one tab (not "Entire document") and the format <b>CSV</b> → Publish → copy the link. Do it for "Body Measurements" and for "Activity", and paste the links here. The app then reads them each time you open it (at most every 6 hours).</div>
+        <Field label="Body Measurements link"><input value={sheet.body} onChange={e => setSheet({ ...sheet, body: e.target.value })} placeholder="https://docs.google.com/spreadsheets/d/e/…output=csv" /></Field>
+        <div style={{ height: 8 }} />
+        <Field label="Activity link"><input value={sheet.act} onChange={e => setSheet({ ...sheet, act: e.target.value })} placeholder="https://docs.google.com/spreadsheets/d/e/…output=csv" /></Field>
+        <div className="row" style={{ marginTop: 10 }}><button className="ok" onClick={syncNow} disabled={syncing || (!sheet.body && !sheet.act)}>{syncing ? 'Syncing…' : 'Save & sync everything now'}</button></div>
+        {settings.lastSyncMsg && <div className="msg">{settings.lastSyncMsg}{settings.lastSync ? ` · ${new Date(settings.lastSync).toLocaleString()}` : ''}</div>}
+        <details style={{ marginTop: 8 }}><summary>Or import CSV files by hand</summary>
+          <input type="file" multiple onChange={importHealth} />
+        </details>
       </div>
 
       <div className="card">

@@ -1,7 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { onAuthStateChanged, signInWithPopup, signInWithRedirect, signOut } from 'firebase/auth';
 import { auth, provider } from './firebase';
 import { useSettings } from './lib/db';
+import { syncSheets } from './lib/health';
 import { DEFAULTS } from './lib/defaults';
 import Measurements from './modules/Measurements';
 import Intake from './modules/Intake';
@@ -16,6 +17,12 @@ export default function App() {
   const [err, setErr] = useState('');
   useEffect(() => onAuthStateChanged(auth, setUser), []);
   const settings = useSettings(user?.uid, DEFAULTS);
+  const synced = useRef(false);
+  useEffect(() => {
+    if (!user || !settings || synced.current) return;
+    synced.current = true;
+    if ((settings.sheetBody || settings.sheetActivity) && Date.now() - (settings.lastSync || 0) > 6 * 3600 * 1000) syncSheets(user.uid, settings);
+  }, [user, settings]);
   const go = t => { setTab(t); try { localStorage.setItem('tab', t); } catch {} };
 
   const login = async () => {
