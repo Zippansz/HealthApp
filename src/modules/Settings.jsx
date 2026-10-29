@@ -3,7 +3,7 @@ import { saveSettings, getAll, putMany } from '../lib/db';
 import { DEFAULTS } from '../lib/defaults';
 import { downloadFile, todayStr, num } from '../lib/calc';
 import { parseCSV, toCSV } from '../lib/csv';
-import { normalizeWorkouts } from './Training';
+import { TAPE } from '../lib/tape';
 
 const Field = ({ label, children }) => <label style={{ display: 'block' }}><div className="lbl" style={{ marginBottom: 3 }}>{label}</div>{children}</label>;
 const N = ({ v, set }) => <input inputMode="decimal" value={v ?? ''} onChange={e => set(e.target.value === '' ? '' : e.target.value)} />;
@@ -47,7 +47,7 @@ export default function Settings({ uid, settings, user, onSignOut }) {
       measurements: a.measurements.sort((x, y) => x.date.localeCompare(y.date)).map(({ id, ...r }) => r),
       meals: a.meals.sort((x, y) => (x.ts || 0) - (y.ts || 0)).map(({ id, ...r }) => ({ ...r, time: r.ts ? new Date(r.ts).toISOString() : null })),
       activity: a.activity.sort((x, y) => x.date.localeCompare(y.date)).map(({ id, ...r }) => r),
-      workouts: normalizeWorkouts(a.workouts, settings.exerciseMap || {}).sort((x, y) => x.start.localeCompare(y.start)).map(({ id, ...r }) => r),
+      workouts: a.workouts.sort((x, y) => x.start.localeCompare(y.start)).map(({ id, ...r }) => r),
     };
     downloadFile(`nano-os-export-${todayStr()}.json`, JSON.stringify(out, null, 1));
     setMsg(`Exported ${out.measurements.length} measurements, ${out.meals.length} meals, ${out.activity.length} activity days, ${out.workouts.length} workouts.`);
@@ -55,11 +55,11 @@ export default function Settings({ uid, settings, user, onSignOut }) {
   const csv = async kind => {
     const a = await loadAll();
     if (kind === 'meals') downloadFile('meals.csv', toCSV(a.meals.sort((x, y) => (x.ts || 0) - (y.ts || 0)).map(m => ({ ...m, time: m.ts ? new Date(m.ts).toISOString() : '' })), ['date', 'time', 'name', 'amount', 'kcal', 'p', 'f', 'c']), 'text/csv');
-    if (kind === 'measurements') downloadFile('measurements.csv', toCSV(a.measurements.sort((x, y) => x.date.localeCompare(y.date)), ['date', 'weight', 'waist', 'navel', 'bf']), 'text/csv');
+    if (kind === 'measurements') downloadFile('measurements.csv', toCSV(a.measurements.sort((x, y) => x.date.localeCompare(y.date)), ['date', 'weight', 'waist', 'navel', 'bf', ...TAPE.map(t => t[0])]), 'text/csv');
     if (kind === 'activity') downloadFile('activity.csv', toCSV(a.activity.sort((x, y) => x.date.localeCompare(y.date)), ['date', 'steps', 'kcal']), 'text/csv');
     if (kind === 'sets') {
       const rows = [];
-      normalizeWorkouts(a.workouts, settings.exerciseMap || {}).forEach(w => w.exercises.forEach(e => e.sets.forEach((s, i) => rows.push({ date: w.date, start: w.start, workout: w.title, exercise: e.name, set: i + 1, type: s.type, kg: s.kg, reps: s.reps, rpe: s.rpe, sec: s.sec, km: s.dist }))));
+      a.workouts.forEach(w => w.exercises.forEach(e => e.sets.forEach((s, i) => rows.push({ date: w.date, start: w.start, workout: w.title, exercise: e.name, set: i + 1, type: s.type, kg: s.kg, reps: s.reps, rpe: s.rpe, sec: s.sec, km: s.dist }))));
       downloadFile('training-sets.csv', toCSV(rows, ['date', 'start', 'workout', 'exercise', 'set', 'type', 'kg', 'reps', 'rpe', 'sec', 'km']), 'text/csv');
     }
   };
@@ -94,9 +94,6 @@ export default function Settings({ uid, settings, user, onSignOut }) {
     }
     e.target.value = '';
   };
-
-  const mapEntries = Object.entries(d.exerciseMap || {});
-  const [alias, setAlias] = useState(''), [canon, setCanon] = useState('');
 
   return (
     <>
@@ -169,14 +166,6 @@ export default function Settings({ uid, settings, user, onSignOut }) {
       </div>
 
       <div className="row" style={{ marginBottom: 12 }}><button className="ok" onClick={save}>Save settings</button><span className="g">{saved}</span></div>
-
-      <div className="card">
-        <h3 style={{ marginBottom: 8 }}>Exercise names (Hevy)</h3>
-        <div className="dim" style={{ fontSize: 13, marginBottom: 8 }}>Merge exercises that Hevy named differently, e.g. "Triceps Rope Pushdown" → "Triceps Pushdown".</div>
-        {mapEntries.map(([a, c]) => <div key={a} className="row sp" style={{ fontSize: 14, marginBottom: 4 }}><span>{a} → <b>{c}</b></span><button className="sm danger" onClick={() => { const m = { ...d.exerciseMap }; delete m[a]; saveSettings(uid, { exerciseMap: m }); }}>✕</button></div>)}
-        <div className="f2" style={{ margin: '8px 0' }}><input placeholder="Hevy name" value={alias} onChange={e => setAlias(e.target.value)} /><input placeholder="Merge into" value={canon} onChange={e => setCanon(e.target.value)} /></div>
-        <button onClick={() => { if (!alias || !canon) return; saveSettings(uid, { exerciseMap: { ...d.exerciseMap, [alias]: canon } }); setAlias(''); setCanon(''); }}>Add</button>
-      </div>
 
       <div className="card">
         <h3 style={{ marginBottom: 8 }}>Import Health Data Export</h3>

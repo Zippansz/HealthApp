@@ -18,7 +18,6 @@ export const DEFAULTS = {
     { name: 'Final Polish', start: '2027-01-11', end: '2027-06-01', mode: 'cutting', weight: 73, navel: 84, waist: 82, bf: 15 },
   ],
   favorites: [],
-  exerciseMap: {},
   geminiKey: '',
   geminiModel: 'gemini-2.5-flash',
 };

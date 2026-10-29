@@ -4,10 +4,6 @@ import { useCollection, putMany } from '../lib/db';
 import { parseHevy } from '../lib/hevy';
 import { e1rm, fmt, withMA } from '../lib/calc';
 
-export function normalizeWorkouts(workouts, map) {
-  return workouts.map(w => ({ ...w, exercises: w.exercises.map(e => ({ ...e, name: map[e.name] || e.name })) }));
-}
-
 // Per-exercise stats from all workouts.
 export function exerciseStats(workouts, bwAt) {
   const by = {};
@@ -40,7 +36,7 @@ export default function Training({ uid, settings }) {
   const [msg, setMsg] = useState('');
   const [busy, setBusy] = useState(false);
 
-  const norm = useMemo(() => normalizeWorkouts(workouts, settings.exerciseMap || {}), [workouts, settings.exerciseMap]);
+  const norm = workouts;
   const ma = useMemo(() => withMA(meas), [meas]);
   const bwAt = date => { const p = ma.filter(m => m.date <= date); return p.length ? p.at(-1).ma : ma[0]?.ma ?? null; };
   const stats = useMemo(() => exerciseStats(norm, bwAt), [norm, ma]);

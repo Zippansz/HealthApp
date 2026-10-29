@@ -2,6 +2,8 @@ import React, { useMemo, useState } from 'react';
 import Chart from '../Chart';
 import { useCollection, put, remove, putMany } from '../lib/db';
 import { MODE_COLORS } from '../lib/defaults';
+import { TAPE } from '../lib/tape';
+import { extractTape } from '../lib/gemini';
 import { todayStr, addDays, daysBetween, num, fmt, rfm, whtr, withMA, slopePerWeek, phaseFor } from '../lib/calc';
 
 function Stat({ label, value, unit, goal, start, cur, lowerIsBetter = true, digits = 1 }) {
@@ -17,12 +19,17 @@ function Stat({ label, value, unit, goal, start, cur, lowerIsBetter = true, digi
   );
 }
 
+const Field2 = ({ label, children }) => <label style={{ display: 'block' }}><div className="lbl" style={{ marginBottom: 3 }}>{label}</div>{children}</label>;
+
 export default function Measurements({ uid, settings }) {
   const rows = useCollection(uid, 'measurements');
   const h = settings.heightCm;
   const [form, setForm] = useState({ date: todayStr(), weight: '', waist: '', navel: '' });
   const [paste, setPaste] = useState('');
   const [msg, setMsg] = useState('');
+  const [tape, setTape] = useState({ date: todayStr() });
+  const [tapeMsg, setTapeMsg] = useState('');
+  const [reading, setReading] = useState(false);
 
   const data = useMemo(() => rows.slice().sort((a, b) => a.date.localeCompare(b.date)), [rows]);
   const ma = useMemo(() => withMA(data), [data]);
@@ -63,6 +70,30 @@ export default function Measurements({ uid, settings }) {
     await putMany(uid, 'measurements', items);
     setMsg(`Imported ${items.length} rows.`); setPaste('');
   };
+
+  const readShot = async e => {
+    const f = e.target.files[0]; if (!f) return;
+    setReading(true); setTapeMsg('');
+    try {
+      const base64 = await new Promise((ok, no) => { const r = new FileReader(); r.onload = () => ok(String(r.result).split(',')[1]); r.onerror = no; r.readAsDataURL(f); });
+      const got = await extractTape({ key: settings.geminiKey, model: settings.geminiModel, base64, mime: f.type || 'image/png' });
+      const next = { ...tape };
+      TAPE.forEach(([k]) => { const v = got[k.slice(2)]; if (v != null) next[k] = String(v); });
+      setTape(next); setTapeMsg('Read from screenshot – check the numbers, then save.');
+    } catch (err) { setTapeMsg(err.message); }
+    setReading(false); e.target.value = '';
+  };
+  const saveTape = async () => {
+    const patch = { date: tape.date };
+    TAPE.forEach(([k]) => { const v = num(tape[k]); if (v != null) patch[k] = v; });
+    if (Object.keys(patch).length < 2) return;
+    await put(uid, 'measurements', tape.date, patch);
+    setTape({ date: tape.date }); setTapeMsg('Saved ✓');
+  };
+  const tapeRows = data.filter(r => TAPE.some(([k]) => r[k] != null));
+  const tapeFirst = k => tapeRows.find(r => r[k] != null)?.[k];
+  const tapeLast = k => [...tapeRows].reverse().find(r => r[k] != null)?.[k];
+  const lastWhr = (() => { const r = [...tapeRows].reverse().find(x => x.t_waist && x.t_hip); return r ? r.t_waist / r.t_hip : null; })();
 
   const bands = settings.phases.map(p => ({ start: p.start, end: p.end, color: MODE_COLORS[p.mode] || '#888', label: p.name }));
   const weightPts = data.filter(r => r.weight != null).map(r => ({ x: r.date, y: r.weight }));
@@ -110,6 +141,24 @@ export default function Measurements({ uid, settings }) {
           <textarea value={paste} onChange={e => setPaste(e.target.value)} />
           <button onClick={importPaste} disabled={!paste.trim()} style={{ marginTop: 6 }}>Import</button> <span className="g">{msg}</span>
         </details>
+      </div>
+
+      <div className="card">
+        <div className="row sp" style={{ marginBottom: 8 }}><h3>Body-part measurements</h3>{lastWhr != null && <span className="mute" style={{ fontSize: 13 }}>Waist–hip ratio <b>{lastWhr.toFixed(2)}</b></span>}</div>
+        {tapeRows.length > 0 && (
+          <table style={{ marginBottom: 10 }}><thead><tr><th></th><th>First</th><th>Latest</th><th>Change</th></tr></thead><tbody>
+            {TAPE.filter(([k]) => tapeLast(k) != null).map(([k, l]) => { const a = tapeFirst(k), b = tapeLast(k), d = b - a; return (
+              <tr key={k}><td>{l}</td><td>{fmt(a, 1)}</td><td>{fmt(b, 1)}</td><td className={Math.abs(d) < 0.05 ? 'dim' : ''}>{Math.abs(d) < 0.05 ? '–' : (d > 0 ? '+' : '') + d.toFixed(1)}</td></tr>); })}
+          </tbody></table>)}
+        <div className="dim" style={{ fontSize: 13, marginBottom: 8 }}>Upload a screenshot of the Renpho body-part screen and the numbers are read for you, or type them in.</div>
+        <input type="file" accept="image/*" onChange={readShot} disabled={reading} />
+        {reading && <div className="mute">Reading…</div>}
+        <div className="f3" style={{ margin: '10px 0' }}>
+          <Field2 label="Date"><input type="date" value={tape.date} onChange={e => setTape({ ...tape, date: e.target.value })} /></Field2>
+          {TAPE.map(([k, l]) => <Field2 key={k} label={l + ' cm'}><input inputMode="decimal" value={tape[k] ?? ''} onChange={e => setTape({ ...tape, [k]: e.target.value })} /></Field2>)}
+        </div>
+        <button className="pri" onClick={saveTape}>Save</button>
+        {tapeMsg && <div className="msg">{tapeMsg}</div>}
       </div>
 
       <div className="card">

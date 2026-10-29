@@ -48,3 +48,25 @@ Today's logged meals: ${context || 'none'}`;
   if (!out) throw new Error('Gemini returned nothing. Try again.');
   return JSON.parse(out);
 }
+
+// Reads body-part measurements (cm) from a screenshot, e.g. of the Renpho app.
+export async function extractTape({ key, model, base64, mime }) {
+  if (!key) throw new Error('No Gemini key yet. Add it in Settings.');
+  const num = { type: 'NUMBER', nullable: true };
+  const fields = ['waist', 'abdomen', 'hip', 'neck', 'shoulder', 'chest', 'bicepL', 'bicepR', 'thighL', 'thighR', 'calfL', 'calfR'];
+  const schema = { type: 'OBJECT', properties: Object.fromEntries(fields.map(f => [f, num])) };
+  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
+    body: JSON.stringify({
+      contents: [{ role: 'user', parts: [
+        { text: 'Read the body measurements in centimetres from this screenshot. L-/R- are left/right. Use null for anything not shown. Do not guess.' },
+        { inlineData: { mimeType: mime, data: base64 } }] }],
+      generationConfig: { responseMimeType: 'application/json', responseSchema: schema, temperature: 0 },
+    }),
+  });
+  if (!res.ok) throw new Error(`Gemini error ${res.status}: ${(await res.text()).slice(0, 200)}`);
+  const out = (await res.json()).candidates?.[0]?.content?.parts?.[0]?.text;
+  if (!out) throw new Error('Could not read the screenshot.');
+  return JSON.parse(out);
+}
