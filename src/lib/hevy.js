@@ -28,3 +28,22 @@ export function parseHevy(text) {
   }
   return [...map.values()];
 }
+
+// Several Hevy sessions on the same date count as ONE workout (stored data stays per session, so re-imports never duplicate).
+export function mergeByDate(workouts) {
+  const days = new Map();
+  for (const w of workouts) {
+    const d = days.get(w.date) || { id: w.date, date: w.date, titles: [], start: w.start, end: w.end, mins: 0, exercises: [] };
+    if (!d.titles.includes(w.title)) d.titles.push(w.title);
+    if (w.start < d.start) d.start = w.start;
+    if (w.end && (!d.end || w.end > d.end)) d.end = w.end;
+    if (w.end) d.mins += Math.max(0, Math.round((new Date(w.end) - new Date(w.start)) / 60000));
+    for (const e of w.exercises) {
+      const x = d.exercises.find(y => y.name === e.name);
+      if (x) { x.sets = [...x.sets, ...e.sets]; if (e.notes && !x.notes.includes(e.notes)) x.notes = [x.notes, e.notes].filter(Boolean).join(' / '); }
+      else d.exercises.push({ ...e, sets: [...e.sets] });
+    }
+    days.set(w.date, d);
+  }
+  return [...days.values()].map(({ titles, ...d }) => ({ ...d, title: titles.join(' + ') }));
+}

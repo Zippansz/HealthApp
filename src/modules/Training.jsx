@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import Chart from '../Chart';
 import { useCollection, putMany } from '../lib/db';
-import { parseHevy } from '../lib/hevy';
+import { parseHevy, mergeByDate } from '../lib/hevy';
 import { e1rm, fmt, withMA } from '../lib/calc';
 
 // Per-exercise stats from all workouts.
@@ -36,7 +36,7 @@ export default function Training({ uid, settings }) {
   const [msg, setMsg] = useState('');
   const [busy, setBusy] = useState(false);
 
-  const norm = workouts;
+  const norm = useMemo(() => mergeByDate(workouts), [workouts]);
   const ma = useMemo(() => withMA(meas), [meas]);
   const bwAt = date => { const p = ma.filter(m => m.date <= date); return p.length ? p.at(-1).ma : ma[0]?.ma ?? null; };
   const stats = useMemo(() => exerciseStats(norm, bwAt), [norm, ma]);
@@ -49,7 +49,7 @@ export default function Training({ uid, settings }) {
         const items = parseHevy(await f.text());
         await putMany(uid, 'workouts', items); total += items.length;
       }
-      setMsg(`Imported ${total} workouts (duplicates are merged automatically).`);
+      setMsg(`Imported ${total} sessions (sessions on the same date are shown as one workout; duplicates are never added twice).`);
     } catch (err) { setMsg('Import failed: ' + err.message); }
     setBusy(false); e.target.value = '';
   };
@@ -102,7 +102,7 @@ export default function Training({ uid, settings }) {
         {recent.map(w => {
           const sets = w.exercises.reduce((a, e) => a + e.sets.filter(s => s.type !== 'warmup').length, 0);
           const vol = w.exercises.reduce((a, e) => a + e.sets.reduce((b, s) => b + (s.kg || 0) * (s.reps || 0), 0), 0);
-          const mins = w.end ? Math.round((new Date(w.end) - new Date(w.start)) / 60000) : null;
+          const mins = w.mins || null;
           return <div key={w.id} style={{ padding: '6px 0', borderBottom: '1px solid #1e293b' }}>
             <div className="row sp"><b>{w.title}</b><span className="dim">{w.date}</span></div>
             <div className="mute" style={{ fontSize: 13 }}>{w.exercises.length} exercises · {sets} sets · {Math.round(vol)} kg volume{mins ? ` · ${mins} min` : ''}</div></div>;

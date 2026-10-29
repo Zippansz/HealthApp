@@ -3,6 +3,7 @@ import { saveSettings, getAll, putMany } from '../lib/db';
 import { DEFAULTS } from '../lib/defaults';
 import { downloadFile, todayStr, num } from '../lib/calc';
 import { parseCSV, toCSV } from '../lib/csv';
+import { mergeByDate } from '../lib/hevy';
 import { TAPE } from '../lib/tape';
 import { importHealthCSV, syncSheets } from '../lib/health';
 
@@ -48,7 +49,7 @@ export default function Settings({ uid, settings, user, onSignOut }) {
       measurements: a.measurements.sort((x, y) => x.date.localeCompare(y.date)).map(({ id, ...r }) => r),
       meals: a.meals.sort((x, y) => (x.ts || 0) - (y.ts || 0)).map(({ id, ...r }) => ({ ...r, time: r.ts ? new Date(r.ts).toISOString() : null })),
       activity: a.activity.sort((x, y) => x.date.localeCompare(y.date)).map(({ id, ...r }) => r),
-      workouts: a.workouts.sort((x, y) => x.start.localeCompare(y.start)).map(({ id, ...r }) => r),
+      workouts: mergeByDate(a.workouts).sort((x, y) => x.start.localeCompare(y.start)).map(({ id, ...r }) => r),
     };
     downloadFile(`nano-os-export-${todayStr()}.json`, JSON.stringify(out, null, 1));
     setMsg(`Exported ${out.measurements.length} measurements, ${out.meals.length} meals, ${out.activity.length} activity days, ${out.workouts.length} workouts.`);
@@ -60,7 +61,7 @@ export default function Settings({ uid, settings, user, onSignOut }) {
     if (kind === 'activity') downloadFile('activity.csv', toCSV(a.activity.sort((x, y) => x.date.localeCompare(y.date)), ['date', 'steps', 'kcal']), 'text/csv');
     if (kind === 'sets') {
       const rows = [];
-      a.workouts.forEach(w => w.exercises.forEach(e => e.sets.forEach((s, i) => rows.push({ date: w.date, start: w.start, workout: w.title, exercise: e.name, set: i + 1, type: s.type, kg: s.kg, reps: s.reps, rpe: s.rpe, sec: s.sec, km: s.dist }))));
+      mergeByDate(a.workouts).forEach(w => w.exercises.forEach(e => e.sets.forEach((s, i) => rows.push({ date: w.date, start: w.start, workout: w.title, exercise: e.name, set: i + 1, type: s.type, kg: s.kg, reps: s.reps, rpe: s.rpe, sec: s.sec, km: s.dist }))));
       downloadFile('training-sets.csv', toCSV(rows, ['date', 'start', 'workout', 'exercise', 'set', 'type', 'kg', 'reps', 'rpe', 'sec', 'km']), 'text/csv');
     }
   };
