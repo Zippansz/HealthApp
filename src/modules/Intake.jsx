@@ -58,18 +58,19 @@ export default function Intake({ uid, settings }) {
         const j = JSON.parse(t);
         const actions = Array.isArray(j) ? j : j.actions;
         if (!Array.isArray(actions)) throw new Error('JSON needs an "actions" list.');
-        setPending({ reply: j.reply || 'Imported from pasted JSON.', actions });
+        setPending({ reply: j.reply || 'Imported from pasted JSON.', actions: actions.map(a => ({ ...a, _on: true })) });
       } else {
         const r = await askGemini({ key: settings.geminiKey, model: settings.geminiModel, text: t, today: date, context: dayMeals.map(m => m.name).join(', ') });
-        setPending({ reply: r.reply, actions: (r.actions || []).map(a => ({ ...a, date: a.date || date })) });
+        setPending({ reply: r.reply, actions: (r.actions || []).map(a => ({ ...a, date: a.date || date, _on: true })) });
       }
     } catch (e) { setErr(e.message); }
     setBusy(false);
   };
   const confirm = async () => {
-    await applyActions(uid, pending.actions, ctx);
+    await applyActions(uid, pending.actions.filter(a => a._on).map(({ _on, ...a }) => a), ctx);
     setPending(null); setText('');
   };
+  const setAct = (i, patch) => setPending(p => ({ ...p, actions: p.actions.map((a, j) => (j === i ? { ...a, ...patch } : a)) }));
   const quick = f => put(uid, 'meals', crypto.randomUUID(), { date, ts: Date.now(), name: f.name, amount: f.amount || '', p: f.p || 0, f: f.f || 0, c: f.c || 0, kcal: f.kcal || 0 });
   const addManual = async () => {
     if (!manual.name.trim()) return;
@@ -118,9 +119,23 @@ export default function Intake({ uid, settings }) {
           <div className="msg">
             <div className="mute" style={{ marginBottom: 6 }}>{pending.reply}</div>
             {pending.actions.length === 0 && <div className="dim">Nothing to save.</div>}
-            {pending.actions.map((a, i) => <div key={i}>• {describe(a)}</div>)}
+            {pending.actions.map((a, i) => (
+              <div key={i} style={{ padding: '8px 0', borderTop: '1px solid #1e293b', opacity: a._on ? 1 : 0.45 }}>
+                <label className="row" style={{ alignItems: 'flex-start', flexWrap: 'nowrap', cursor: 'pointer' }}>
+                  <input type="checkbox" checked={a._on} onChange={e => setAct(i, { _on: e.target.checked })} style={{ width: 22, height: 22, marginTop: 2, flex: 'none' }} />
+                  <span>{a.type === 'add_meal' ? <><b>{a.name}</b>{a.amount ? <span className="mute"> – {a.amount}</span> : null}</> : describe(a)}</span>
+                </label>
+                {a.type === 'add_meal' && a._on && (
+                  <div className="f3" style={{ margin: '6px 0 0 30px', gridTemplateColumns: 'repeat(4,1fr)' }}>
+                    {[['kcal', 'kcal'], ['p', 'P g'], ['f', 'F g'], ['c', 'C g']].map(([k, l]) => (
+                      <label key={k}><div className="lbl">{l}</div>
+                        <input inputMode="decimal" value={a[k] ?? ''} onChange={e => setAct(i, { [k]: e.target.value === '' ? 0 : num(e.target.value) ?? 0 })} style={{ padding: 6 }} /></label>))}
+                  </div>)}
+              </div>))}
+            {pending.actions.some(a => a._on && a.type === 'add_meal') && (
+              <div className="mute" style={{ fontSize: 13, marginTop: 6 }}>Total selected: <b>{Math.round(pending.actions.filter(a => a._on && a.type === 'add_meal').reduce((t, a) => t + (a.kcal || 0), 0))} kcal</b> · P {Math.round(pending.actions.filter(a => a._on && a.type === 'add_meal').reduce((t, a) => t + (a.p || 0), 0))} g</div>)}
             <div className="row" style={{ marginTop: 8 }}>
-              <button className="ok" onClick={confirm} disabled={!pending.actions.length}>Save</button>
+              <button className="ok" onClick={confirm} disabled={!pending.actions.some(a => a._on)}>Save selected ({pending.actions.filter(a => a._on).length})</button>
               <button onClick={() => setPending(null)}>Discard</button>
             </div>
           </div>
