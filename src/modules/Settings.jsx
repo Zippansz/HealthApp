@@ -176,6 +176,10 @@ export default function Settings({ uid, settings, user, onSignOut }) {
         <div className="row">{['meals', 'measurements', 'activity', 'sets'].map(k => <button key={k} className="sm" onClick={() => csv(k)}>{k}.csv</button>)}</div>
         {msg && <div className="msg">{msg}</div>}
       </div>
+      <div className="dim" style={{ fontSize: 12, textAlign: 'center', margin: '16px 0 8px' }}>
+        Nano OS Health v{__APP_VERSION__} · build {__BUILD_SHA__}<br />
+        Published {new Date(__BUILD_TIME__).toLocaleString('sv-SE', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Europe/Stockholm' })}
+      </div>
     </>
   );
 }
