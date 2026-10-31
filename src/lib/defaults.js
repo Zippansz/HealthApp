@@ -19,6 +19,6 @@ export const DEFAULTS = {
   ],
   favorites: [],
   geminiKey: '',
-  geminiModel: 'gemini-2.5-flash',
+  geminiModel: 'gemini-3.8-flash',
 };
 export const MODE_COLORS = { cutting: '#ef4444', maintenance: '#38bdf8', bulking: '#10b981' };
