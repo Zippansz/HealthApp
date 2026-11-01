@@ -22,7 +22,7 @@ const SCHEMA = {
   required: ['actions'],
 };
 
-export async function askGemini({ key, model, text, today, context }) {
+export async function askGemini({ key, model, text, today, context, images = [] }) {
   if (!key) throw new Error('No Gemini key yet. Add it in Settings.');
   const system = `You are the logging engine of a personal health app. Today is ${today}.
 Turn the user's text into actions. Estimate nutrition realistically for the stated amounts (Swedish and English food names are both common).
@@ -31,6 +31,7 @@ Turn the user's text into actions. Estimate nutrition realistically for the stat
 - activity: kcalBurned (exercise calories) and/or steps for the date.
 - measurement: weight (kg), waist (cm), navel (cm) when the user reports body measurements.
 - add_favorite / remove_favorite: a reusable meal with its macros.
+Photos may be attached: a recipe (ingredients and amounts, possibly a screenshot or book page), a food package or label, or a plate of food. Read them carefully. For a recipe, work out the nutrition of the WHOLE recipe from its ingredients and amounts, then apply what the user asks: a portion ("1/4 of this recipe", "2 portions") means scale the whole recipe accordingly and log it as ONE add_meal named after the dish with the portion as amount (e.g. "1/4 portion"). Substitutions ("low fat mayo instead", "skip the cheese") must change the ingredient values before scaling. If the recipe states servings and the user gives no portion, log one serving. If a label shows values per 100 g, scale to the amount given. Only split a dish into several items if the user asks.
 Put a short friendly summary in "reply". Never invent actions the user did not ask for.
 Today's logged meals: ${context || 'none'}`;
   const call = thinking => fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
@@ -38,7 +39,7 @@ Today's logged meals: ${context || 'none'}`;
     headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
     body: JSON.stringify({
       systemInstruction: { parts: [{ text: system }] },
-      contents: [{ role: 'user', parts: [{ text }] }],
+      contents: [{ role: 'user', parts: [{ text: text || 'Log what is in the attached photo(s).' }, ...images.map(i => ({ inlineData: { mimeType: i.mime, data: i.data } }))] }],
       generationConfig: { responseMimeType: 'application/json', responseSchema: SCHEMA, temperature: 0.2, ...(thinking ? { thinkingConfig: { thinkingLevel: 'low' } } : {}) },
     }),
   });

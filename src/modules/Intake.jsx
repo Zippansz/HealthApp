@@ -5,6 +5,19 @@ import { askGemini } from '../lib/gemini';
 import { applyActions, describe } from '../lib/actions';
 import Bars, { MACRO_COLORS } from '../Bars';
 
+// Shrinks a photo to max 1400 px JPEG so uploads stay small and fast.
+async function shrink(file) {
+  const url = URL.createObjectURL(file);
+  try {
+    const img = await new Promise((ok, no) => { const i = new Image(); i.onload = () => ok(i); i.onerror = no; i.src = url; });
+    const k = Math.min(1, 1400 / Math.max(img.width, img.height));
+    const c = document.createElement('canvas'); c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+    c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+    const data = c.toDataURL('image/jpeg', 0.85);
+    return { mime: 'image/jpeg', data: data.split(',')[1], preview: data };
+  } finally { URL.revokeObjectURL(url); }
+}
+
 function Meter({ label, val, min, max, unit = '' }) {
   const target = max ?? min;
   const pct = Math.min(100, (val / (target || 1)) * 100);
@@ -26,10 +39,15 @@ export default function Intake({ uid, settings }) {
   const acts = useCollection(uid, 'activity', { since });
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
+  const [photos, setPhotos] = useState([]);
+  const addPhotos = async e => {
+    const files = [...e.target.files]; e.target.value = '';
+    try { const imgs = await Promise.all(files.map(shrink)); setPhotos(p => [...p, ...imgs].slice(0, 6)); } catch { setErr('Could not read that photo.'); }
+  };
   const [pending, setPending] = useState(null); // {reply, actions} – result of the last request
   const finish = async (reply, actions) => {
     if (!actions.length) { setPending({ reply, actions }); return; }
-    setText(''); setPending(null);
+    setText(''); setPending(null); setPhotos([]);
     applyActions(uid, actions, { settings, todayMeals: dayMeals }).catch(e => setErr('Could not save: ' + e.message));
   };
   const [err, setErr] = useState('');
@@ -67,13 +85,13 @@ export default function Intake({ uid, settings }) {
     setErr(''); setBusy(true);
     try {
       const t = text.trim();
-      if (t.startsWith('{') || t.startsWith('[')) { // pasted from a Claude chat
+      if (!photos.length && (t.startsWith('{') || t.startsWith('['))) { // pasted from a Claude chat
         const j = JSON.parse(t);
         const actions = Array.isArray(j) ? j : j.actions;
         if (!Array.isArray(actions)) throw new Error('JSON needs an "actions" list.');
         await finish(j.reply || 'Imported from pasted JSON.', actions);
       } else {
-        const r = await askGemini({ key: settings.geminiKey, model: settings.geminiModel, text: t, today: date, context: dayMeals.map(m => m.name).join(', ') });
+        const r = await askGemini({ key: settings.geminiKey, model: settings.geminiModel, text: t, images: photos, today: date, context: dayMeals.map(m => m.name).join(', ') });
         await finish(r.reply, (r.actions || []).map(a => ({ ...a, date: a.date || date })));
       }
     } catch (e) { setErr(e.message); }
@@ -117,9 +135,18 @@ export default function Intake({ uid, settings }) {
 
       <div className="card">
         <h3 style={{ marginBottom: 8 }}>Log with AI</h3>
-        <textarea value={text} onChange={e => setText(e.target.value)} placeholder={'e.g. "2 eggs, 2 slices rye bread with cheese and a coffee with milk"\nor "ran 5k, burned 400 kcal"\nYou can also paste JSON that Claude gave you.'} />
+        <textarea value={text} onChange={e => setText(e.target.value)} placeholder={'e.g. "2 eggs, 2 slices rye bread with cheese and a coffee with milk"\nWith a photo of a recipe: "1/4 of this recipe, low fat mayo instead"\nYou can also paste JSON that Claude gave you.'} />
+        {photos.length > 0 && (
+          <div className="row" style={{ marginTop: 8 }}>
+            {photos.map((p, i) => (
+              <span key={i} style={{ position: 'relative' }}>
+                <img src={p.preview} alt="" style={{ width: 64, height: 64, objectFit: 'cover', borderRadius: 10, border: '1px solid var(--line)' }} />
+                <button className="sm" onClick={() => setPhotos(photos.filter((_, j) => j !== i))} style={{ position: 'absolute', top: -6, right: -6, padding: '0 6px', borderRadius: 99 }}>✕</button>
+              </span>))}
+          </div>)}
         <div className="row" style={{ marginTop: 8 }}>
-          <button className="pri" onClick={run} disabled={busy || !text.trim()}>{busy ? 'Thinking…' : 'Analyze'}</button>
+          <label className="chip" style={{ margin: 0 }}>📷 Photo<input type="file" accept="image/*" multiple onChange={addPhotos} style={{ display: 'none' }} /></label>
+          <button className="pri" onClick={run} disabled={busy || (!text.trim() && !photos.length)}>{busy ? 'Thinking…' : 'Analyze'}</button>
           {!settings.geminiKey && <span className="a" style={{ fontSize: 13 }}>Add your Gemini key in Settings first.</span>}
         </div>
         {err && <div className="msg r">{err}</div>}
