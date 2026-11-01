@@ -127,7 +127,7 @@ export default function Intake({ uid, settings }) {
       {(settings.favorites.length > 0 || frequent.length > 0) && (
         <div className="card">
           {settings.favorites.length > 0 && <><h3 style={{ marginBottom: 8 }}>Favorites</h3>
-            {settings.favorites.map(f => <span key={f.name} className="chip"><span onClick={() => quick(f)}>★ {f.name} · {Math.round(f.kcal)}</span><span onClick={() => window.confirm('Remove favorite "' + f.name + '"?') && saveSettings(uid, { favorites: settings.favorites.filter(x => x.name !== f.name) })} style={{ marginLeft: 10, padding: '0 4px', color: '#fca5a5' }}>✕</span></span>)}</>}
+            {settings.favorites.map(f => <span key={f.name} className="chip"><span onClick={() => quick(f)}>★ {f.name} · {f.amount || Math.round(f.kcal) + ' kcal'}</span><span onClick={() => window.confirm('Remove favorite "' + f.name + '"?') && saveSettings(uid, { favorites: settings.favorites.filter(x => x.name !== f.name) })} style={{ marginLeft: 10, padding: '0 4px', color: '#fca5a5' }}>✕</span></span>)}</>}
           {frequent.length > 0 && <><h3 style={{ margin: '8px 0' }}>Often eaten</h3>
             {frequent.map(f => <span key={f.name} className="chip" onClick={() => quick(f)}>+ {f.name} · {Math.round(f.kcal)}</span>)}</>}
         </div>
