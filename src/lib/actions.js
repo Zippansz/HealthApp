@@ -20,22 +20,23 @@ export const describe = a => {
 export async function applyActions(uid, actions, { settings, todayMeals }) {
   let favs = [...(settings.favorites || [])];
   let favsChanged = false;
+  const jobs = [];
   for (const a of actions) {
     const date = a.date || todayStr();
     if (a.type === 'add_meal') {
-      await put(uid, 'meals', crypto.randomUUID(), { date, ts: Date.now(), name: a.name, amount: a.amount || '', p: a.p || 0, f: a.f || 0, c: a.c || 0, kcal: a.kcal || 0 });
+      jobs.push(put(uid, 'meals', crypto.randomUUID(), { date, ts: Date.now(), name: a.name, amount: a.amount || '', p: a.p || 0, f: a.f || 0, c: a.c || 0, kcal: a.kcal || 0 }));
     } else if (a.type === 'remove_meal') {
       const hit = [...todayMeals].reverse().find(m => m.name.toLowerCase() === (a.name || '').toLowerCase());
-      if (hit) await remove(uid, 'meals', hit.id);
+      if (hit) jobs.push(remove(uid, 'meals', hit.id));
     } else if (a.type === 'activity') {
       const patch = { date };
       if (a.kcalBurned != null) patch.kcal = a.kcalBurned;
       if (a.steps != null) patch.steps = a.steps;
-      await put(uid, 'activity', date, patch);
+      jobs.push(put(uid, 'activity', date, patch));
     } else if (a.type === 'measurement') {
       const patch = { date };
       ['weight', 'waist', 'navel'].forEach(k => { if (a[k] != null) patch[k] = a[k]; });
-      await put(uid, 'measurements', date, patch);
+      jobs.push(put(uid, 'measurements', date, patch));
     } else if (a.type === 'add_favorite') {
       favs = favs.filter(f => f.name.toLowerCase() !== a.name.toLowerCase());
       favs.push({ name: a.name, amount: a.amount || '', p: a.p || 0, f: a.f || 0, c: a.c || 0, kcal: a.kcal || 0 }); favsChanged = true;
@@ -43,5 +44,6 @@ export async function applyActions(uid, actions, { settings, todayMeals }) {
       favs = favs.filter(f => f.name.toLowerCase() !== (a.name || '').toLowerCase()); favsChanged = true;
     }
   }
-  if (favsChanged) await saveSettings(uid, { favorites: favs });
+  if (favsChanged) jobs.push(saveSettings(uid, { favorites: favs }));
+  await Promise.all(jobs);
 }

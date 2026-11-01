@@ -33,15 +33,18 @@ Turn the user's text into actions. Estimate nutrition realistically for the stat
 - add_favorite / remove_favorite: a reusable meal with its macros.
 Put a short friendly summary in "reply". Never invent actions the user did not ask for.
 Today's logged meals: ${context || 'none'}`;
-  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+  const call = thinking => fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
     body: JSON.stringify({
       systemInstruction: { parts: [{ text: system }] },
       contents: [{ role: 'user', parts: [{ text }] }],
-      generationConfig: { responseMimeType: 'application/json', responseSchema: SCHEMA, temperature: 0.2 },
+      generationConfig: { responseMimeType: 'application/json', responseSchema: SCHEMA, temperature: 0.2, ...(thinking ? { thinkingConfig: { thinkingLevel: 'low' } } : {}) },
     }),
   });
+  // Short thinking = much faster answers. If a model rejects the setting, retry without it.
+  let res = await call(/gemini-3/.test(model));
+  if (res.status === 400 && /gemini-3/.test(model)) res = await call(false);
   if (!res.ok) throw new Error(`Gemini error ${res.status}: ${(await res.text()).slice(0, 200)}`);
   const j = await res.json();
   const out = j.candidates?.[0]?.content?.parts?.[0]?.text;
