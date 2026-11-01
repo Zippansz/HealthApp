@@ -24,7 +24,7 @@ export default function Settings({ uid, settings, user, onSignOut }) {
   const clean = () => {
     const n = structuredClone(d);
     const f = (o, ks) => ks.forEach(k => (o[k] = num(o[k]) ?? DEFAULTS[k]));
-    n.heightCm = num(n.heightCm) ?? 177; n.baseTdee = num(n.baseTdee) ?? 2200; n.stepsBaseline = num(n.stepsBaseline) ?? 5000; n.kcalPerStep = num(n.kcalPerStep) ?? 0.04;
+    n.heightCm = num(n.heightCm) ?? 177; n.baseTdee = num(n.baseTdee) ?? 2200; n.stepsInBase = num(n.stepsInBase) ?? 6800; delete n.stepsBaseline; n.kcalPerStep = num(n.kcalPerStep) ?? 0.04;
     Object.keys(n.start).forEach(k => (n.start[k] = num(n.start[k]) ?? 0));
     Object.keys(n.goal).forEach(k => (n.goal[k] = num(n.goal[k]) ?? 0));
     Object.values(n.modes).forEach(m => ['p', 'kcalMin', 'kcalMax', 'fMax', 'cMax'].forEach(k => (m[k] = num(m[k]) ?? 0)));
@@ -110,7 +110,7 @@ export default function Settings({ uid, settings, user, onSignOut }) {
         <div className="f2" style={{ marginBottom: 10 }}>
           <Field label="Height cm"><N v={d.heightCm} set={v => up(['heightCm'], v)} /></Field>
           <Field label="Base TDEE kcal"><N v={d.baseTdee} set={v => up(['baseTdee'], v)} /></Field>
-          <Field label="Steps already in base TDEE"><N v={d.stepsBaseline} set={v => up(['stepsBaseline'], v)} /></Field>
+          <Field label="Steps already in base TDEE"><N v={d.stepsInBase} set={v => up(['stepsInBase'], v)} /></Field>
           <Field label="kcal per step (above that)"><N v={d.kcalPerStep} set={v => up(['kcalPerStep'], v)} /></Field>
         </div>
         <table><thead><tr><th></th><th>Start</th><th>Final goal</th></tr></thead><tbody>
