@@ -3,6 +3,7 @@ import { useCollection, put, remove, saveSettings } from '../lib/db';
 import { todayStr, addDays, num, phaseFor } from '../lib/calc';
 import { askGemini } from '../lib/gemini';
 import { applyActions, describe } from '../lib/actions';
+import Bars, { MACRO_COLORS } from '../Bars';
 
 function Meter({ label, val, min, max, unit = '' }) {
   const target = max ?? min;
@@ -42,6 +43,12 @@ export default function Intake({ uid, settings }) {
   const tot = dayMeals.reduce((t, m) => ({ p: t.p + (m.p || 0), f: t.f + (m.f || 0), c: t.c + (m.c || 0), kcal: t.kcal + (m.kcal || 0) }), { p: 0, f: 0, c: 0, kcal: 0 });
   const burn = settings.baseTdee + (act.kcal || 0);
   const balance = tot.kcal - burn;
+
+  const last14 = useMemo(() => Array.from({ length: 14 }, (_, i) => {
+    const d = addDays(todayStr(), i - 13);
+    const t = meals.filter(m => m.date === d).reduce((a, m) => ({ p: a.p + (m.p || 0), f: a.f + (m.f || 0), c: a.c + (m.c || 0) }), { p: 0, f: 0, c: 0 });
+    return { date: d, ...t };
+  }), [meals]);
 
   const frequent = useMemo(() => {
     const m = new Map();
@@ -87,6 +94,16 @@ export default function Intake({ uid, settings }) {
           <button className="sm" onClick={() => setDate(addDays(date, -1))}>‹</button>
           <input type="date" value={date} onChange={e => setDate(e.target.value)} style={{ width: 150 }} />
           <button className="sm" onClick={() => setDate(addDays(date, 1))}>›</button>
+        </div>
+      </div>
+
+      <div className="card">
+        <h3 style={{ marginBottom: 6 }}>Last 14 days</h3>
+        <Bars days={last14} picked={date} onPick={setDate}
+          lines={[{ y: mode.p * 4, color: '#7dd3fc', label: `Protein target ${mode.p} g` }, { y: mode.kcalMax, color: '#ef4444', label: `Max ${mode.kcalMax} kcal` }]} />
+        <div className="row" style={{ fontSize: 12, marginTop: 4 }}>
+          {[['p', 'Protein'], ['c', 'Carbs'], ['f', 'Fat']].map(([k, l]) => <span key={k} className="mute"><i style={{ display: 'inline-block', width: 10, height: 10, background: MACRO_COLORS[k], borderRadius: 2, marginRight: 4 }} />{l}</span>)}
+          <span className="dim">Bar height = kcal from each macro · tap a day to open it</span>
         </div>
       </div>
 
