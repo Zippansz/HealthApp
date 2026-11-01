@@ -34,7 +34,7 @@ function Meter({ label, val, min, max, unit = '' }) {
 
 export default function Intake({ uid, settings }) {
   const [date, setDate] = useState(todayStr());
-  const since = date < addDays(todayStr(), -60) ? date : addDays(todayStr(), -60);
+  const since = date < addDays(todayStr(), -70) ? date : addDays(todayStr(), -70);
   const meals = useCollection(uid, 'meals', { since });
   const acts = useCollection(uid, 'activity', { since });
   const imported = useCollection(uid, 'nutrition', { since });
@@ -71,6 +71,30 @@ export default function Intake({ uid, settings }) {
     return imp ? { date: d, p: imp.p, f: imp.f, c: imp.c, imported: true } : { date: d, ...t };
   }), [meals, imported]);
   const expTrace = last14.map(d => { const a = acts.find(x => x.id === d.date); return a ? expenditure(settings, a) : null; });
+
+  // ----- weekly summary (Mon–Sun). Today and very low (unfinished) days are left out of the averages. -----
+  const weekly = useMemo(() => {
+    const today = todayStr();
+    const groups = new Map();
+    for (let i = 69; i >= 1; i--) {
+      const d = addDays(today, -i);
+      const dm = meals.filter(m => m.date === d);
+      let day = null;
+      if (dm.length) day = dm.reduce((a, m) => ({ kcal: a.kcal + (m.kcal || 0), p: a.p + (m.p || 0), f: a.f + (m.f || 0), c: a.c + (m.c || 0) }), { kcal: 0, p: 0, f: 0, c: 0 });
+      else { const im = imported.find(x => x.id === d); if (im) day = { kcal: im.kcal, p: im.p, f: im.f, c: im.c }; }
+      if (!day || day.kcal < 800) continue;
+      const mode = settings.modes[phaseFor(settings.phases, d)?.mode] || settings.modes.maintenance;
+      const burn = expenditure(settings, acts.find(x => x.id === d) || {});
+      const wd = new Date(d + 'T12:00:00').getDay();
+      const wk = addDays(d, -((wd + 6) % 7));
+      const g = groups.get(wk) || { wk, n: 0, kcal: 0, p: 0, f: 0, c: 0, burn: 0, inRange: 0, protOk: 0 };
+      g.n++; g.kcal += day.kcal; g.p += day.p; g.f += day.f; g.c += day.c; g.burn += burn;
+      if (day.kcal >= mode.kcalMin && day.kcal <= mode.kcalMax) g.inRange++;
+      if (day.p >= mode.p) g.protOk++;
+      groups.set(wk, g);
+    }
+    return [...groups.values()].sort((a, b) => b.wk.localeCompare(a.wk)).slice(0, 8);
+  }, [meals, imported, acts, settings]);
 
   const frequent = useMemo(() => {
     const m = new Map();
@@ -204,6 +228,19 @@ export default function Intake({ uid, settings }) {
         </div>
       </div>
 
+      <div className="card">
+        <h3 style={{ marginBottom: 6 }}>Weekly summary</h3>
+        {weekly.length === 0 ? <div className="dim">No complete days yet.</div> : (
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ minWidth: 420 }}><thead><tr><th>Week of</th><th>Days</th><th>kcal</th><th>Protein</th><th>In range</th><th>Protein ✓</th><th>vs burn</th></tr></thead><tbody>
+              {weekly.map(g => { const bal = (g.kcal - g.burn) / g.n; return (
+                <tr key={g.wk}><td>{g.wk.slice(5)}</td><td>{g.n}</td><td><b>{Math.round(g.kcal / g.n)}</b></td><td>{Math.round(g.p / g.n)} g</td>
+                  <td>{g.inRange}/{g.n}</td><td>{g.protOk}/{g.n}</td>
+                  <td className={bal > 0 ? 'a' : 'g'}>{bal > 0 ? '+' : ''}{Math.round(bal)}</td></tr>); })}
+            </tbody></table>
+          </div>)}
+        <div className="dim" style={{ fontSize: 12, marginTop: 6 }}>Averages per logged day (Mon–Sun weeks). In range = kcal inside that day's phase target; Protein ✓ = protein target reached; vs burn = average intake minus estimated expenditure per day. Today and days under 800 kcal (unfinished logging) are left out.</div>
+      </div>
     </>
   );
 }
