@@ -29,7 +29,19 @@ export async function importHealthCSV(uid, text, { since } = {}) {
     await putMany(uid, 'activity', items);
     return { kind: 'activity days', count: items.length };
   }
-  throw new Error('Not recognised (expected the Body Measurements or Activity tab).');
+  if (head.includes('Weight(kg)')) {           // own spreadsheet: Date, Weight(kg), Navel(cm), Waist(cm) with comma decimals and "Null"
+    rows.forEach(r => {
+      const date = r.Date;
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date || '') || (since && date < since)) return;
+      const o = { date };
+      const w = num(r['Weight(kg)']), n = num(r['Navel(cm)']), wa = num(r['Waist(cm)']);
+      if (w != null) o.weight = w; if (n != null) o.navel = n; if (wa != null) o.waist = wa;
+      if (Object.keys(o).length > 1) byDay[date] = o;
+    });
+    await putMany(uid, 'measurements', Object.values(byDay).map(x => ({ id: x.date, data: x })));
+    return { kind: 'measurement days', count: Object.keys(byDay).length };
+  }
+  throw new Error('Not recognised (expected the Body Measurements or Activity tab, or a Date / Weight(kg) / Navel(cm) / Waist(cm) sheet).');
 }
 
 // Fetches the published-CSV links and imports them. First run = everything, later runs = last 10 days.
