@@ -24,7 +24,7 @@ export default function Bars({ days, lines = [], trace, height = 300, onPick, pi
         return (
           <g key={d.date} onClick={() => onPick && onPick(d.date)} style={{ cursor: onPick ? 'pointer' : 'default' }}>
             <rect x={L + i * bw} y={T} width={bw} height={H - T - B} fill={picked === d.date ? '#ffffff' : 'transparent'} opacity=".06" />
-            {segs.map(s => s.y1 > s.y0 && <rect key={s.m} x={x} y={Y(s.y1)} width={w} height={Y(s.y0) - Y(s.y1)} fill={MACRO_COLORS[s.m]} />)}
+            {segs.map(s => s.y1 > s.y0 && <rect key={s.m} x={x} y={Y(s.y1)} width={w} height={Y(s.y0) - Y(s.y1)} fill={MACRO_COLORS[s.m]} opacity={d.imported ? 0.5 : 1} />)}
             {base > 0 && <text x={x + w / 2} y={Y(base) - 3} fontSize="10" textAnchor="middle" fill="#94a3b8">{bw >= 20 ? Math.round(base) : ''}</text>}
             <text x={x + w / 2} y={H - 20} fontSize="12" textAnchor="middle" fill={picked === d.date ? '#e2e8f0' : '#94a3b8'}>{dt.getDate()}</text>
             <text x={x + w / 2} y={H - 6} fontSize="10" textAnchor="middle" fill="#64748b">{'SMTWTFS'[dt.getDay()]}</text>

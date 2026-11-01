@@ -35,8 +35,8 @@ export default function Settings({ uid, settings, user, onSignOut }) {
 
   // ---------- exports ----------
   const loadAll = async () => {
-    const [measurements, meals, activity, workouts] = await Promise.all(['measurements', 'meals', 'activity', 'workouts'].map(n => getAll(uid, n)));
-    return { measurements, meals, activity, workouts };
+    const [measurements, meals, activity, workouts, nutrition] = await Promise.all(['measurements', 'meals', 'activity', 'workouts', 'nutrition'].map(n => getAll(uid, n)));
+    return { measurements, meals, activity, workouts, nutrition };
   };
   const exportAnalysis = async () => {
     setMsg('Preparing…');
@@ -44,10 +44,11 @@ export default function Settings({ uid, settings, user, onSignOut }) {
     const { geminiKey, ...cfg } = settings;
     const out = {
       exportedAt: new Date().toISOString(),
-      about: 'Personal health data from the Nano OS Health app. Dates are YYYY-MM-DD. Weights in kg, lengths in cm. meals[].ts is a unix-ms timestamp of when the meal was logged. Use workouts[].exercises[].sets for training. settings.phases describe the planned phases/targets.',
+      about: 'Personal health data from the Nano OS Health app. Dates are YYYY-MM-DD. Weights in kg, lengths in cm. meals[].ts is a unix-ms timestamp of when the meal was logged. Use workouts[].exercises[].sets for training. importedDailyFoodTotals are daily totals imported from a Fitbit/Health Connect sheet for days before meals were logged in the app (kcal, p/f/c in grams). settings.phases describe the planned phases/targets.',
       settings: cfg,
       measurements: a.measurements.sort((x, y) => x.date.localeCompare(y.date)).map(({ id, ...r }) => r),
       meals: a.meals.sort((x, y) => (x.ts || 0) - (y.ts || 0)).map(({ id, ...r }) => ({ ...r, time: r.ts ? new Date(r.ts).toISOString() : null })),
+      importedDailyFoodTotals: a.nutrition.sort((x, y) => x.date.localeCompare(y.date)).map(({ id, ...r }) => r),
       activity: a.activity.sort((x, y) => x.date.localeCompare(y.date)).map(({ id, ...r }) => r),
       workouts: mergeByDate(a.workouts).sort((x, y) => x.start.localeCompare(y.start)).map(({ id, ...r }) => r),
     };
@@ -75,12 +76,12 @@ export default function Settings({ uid, settings, user, onSignOut }) {
     }
     e.target.value = '';
   };
-  const [sheet, setSheet] = useState({ body: settings.sheetBody || '', act: settings.sheetActivity || '' });
+  const [sheet, setSheet] = useState({ body: settings.sheetBody || '', act: settings.sheetActivity || '', nut: settings.sheetNutrition || '' });
   const [syncing, setSyncing] = useState(false);
   const syncNow = async () => {
     setSyncing(true);
-    await saveSettings(uid, { sheetBody: sheet.body.trim(), sheetActivity: sheet.act.trim(), lastSync: null });
-    await syncSheets(uid, { ...settings, sheetBody: sheet.body.trim(), sheetActivity: sheet.act.trim(), lastSync: null });
+    await saveSettings(uid, { sheetBody: sheet.body.trim(), sheetActivity: sheet.act.trim(), sheetNutrition: sheet.nut.trim(), lastSync: null });
+    await syncSheets(uid, { ...settings, sheetBody: sheet.body.trim(), sheetActivity: sheet.act.trim(), sheetNutrition: sheet.nut.trim(), lastSync: null });
     setSyncing(false);
   };
 
@@ -164,7 +165,9 @@ export default function Settings({ uid, settings, user, onSignOut }) {
         <Field label="Body Measurements link"><input value={sheet.body} onChange={e => setSheet({ ...sheet, body: e.target.value })} placeholder="https://docs.google.com/spreadsheets/d/e/…output=csv" /></Field>
         <div style={{ height: 8 }} />
         <Field label="Activity link"><input value={sheet.act} onChange={e => setSheet({ ...sheet, act: e.target.value })} placeholder="https://docs.google.com/spreadsheets/d/e/…output=csv" /></Field>
-        <div className="row" style={{ marginTop: 10 }}><button className="ok" onClick={syncNow} disabled={syncing || (!sheet.body && !sheet.act)}>{syncing ? 'Syncing…' : 'Save & sync everything now'}</button></div>
+        <div style={{ height: 8 }} />
+        <Field label="Nutrition link (optional – daily food totals, e.g. from Fitbit)"><input value={sheet.nut} onChange={e => setSheet({ ...sheet, nut: e.target.value })} placeholder="https://docs.google.com/spreadsheets/d/e/…output=csv" /></Field>
+        <div className="row" style={{ marginTop: 10 }}><button className="ok" onClick={syncNow} disabled={syncing || (!sheet.body && !sheet.act && !sheet.nut)}>{syncing ? 'Syncing…' : 'Save & sync everything now'}</button></div>
         {settings.lastSyncMsg && <div className="msg">{settings.lastSyncMsg}{settings.lastSync ? ` · ${new Date(settings.lastSync).toLocaleString()}` : ''}</div>}
         <details style={{ marginTop: 8 }}><summary>Or import CSV files by hand</summary>
           <input type="file" multiple onChange={importHealth} />

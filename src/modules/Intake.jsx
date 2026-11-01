@@ -37,6 +37,7 @@ export default function Intake({ uid, settings }) {
   const since = date < addDays(todayStr(), -60) ? date : addDays(todayStr(), -60);
   const meals = useCollection(uid, 'meals', { since });
   const acts = useCollection(uid, 'activity', { since });
+  const imported = useCollection(uid, 'nutrition', { since });
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
   const [photos, setPhotos] = useState([]);
@@ -65,8 +66,10 @@ export default function Intake({ uid, settings }) {
   const last14 = useMemo(() => Array.from({ length: 14 }, (_, i) => {
     const d = addDays(todayStr(), i - 13);
     const t = meals.filter(m => m.date === d).reduce((a, m) => ({ p: a.p + (m.p || 0), f: a.f + (m.f || 0), c: a.c + (m.c || 0) }), { p: 0, f: 0, c: 0 });
-    return { date: d, ...t };
-  }), [meals]);
+    const has = meals.some(m => m.date === d);
+    const imp = !has && imported.find(x => x.id === d);   // days without app meals fall back to imported daily totals
+    return imp ? { date: d, p: imp.p, f: imp.f, c: imp.c, imported: true } : { date: d, ...t };
+  }), [meals, imported]);
   const expTrace = last14.map(d => { const a = acts.find(x => x.id === d.date); return a ? expenditure(settings, a) : null; });
 
   const frequent = useMemo(() => {
@@ -161,7 +164,7 @@ export default function Intake({ uid, settings }) {
 
       <div className="card">
         <h3 style={{ marginBottom: 6 }}>Meals · {date}</h3>
-        {dayMeals.length === 0 && <div className="dim">Nothing logged.</div>}
+        {dayMeals.length === 0 && <div className="dim">Nothing logged{(() => { const i = imported.find(x => x.id === date); return i ? ` in the app. Imported daily total: ${Math.round(i.kcal)} kcal · P ${Math.round(i.p)} F ${Math.round(i.f)} C ${Math.round(i.c)}` : '.'; })()}</div>}
         <table><tbody>{dayMeals.map(m => (
           <tr key={m.id}>
             <td>{m.name}<div className="dim" style={{ fontSize: 12 }}>{m.amount} · P{Math.round(m.p)} F{Math.round(m.f)} C{Math.round(m.c)}</div></td>
@@ -197,7 +200,7 @@ export default function Intake({ uid, settings }) {
         <div className="row" style={{ fontSize: 12, marginTop: 4 }}>
           {[['p', 'Protein'], ['c', 'Carbs'], ['f', 'Fat']].map(([k, l]) => <span key={k} className="mute"><i style={{ display: 'inline-block', width: 10, height: 10, background: MACRO_COLORS[k], borderRadius: 2, marginRight: 4 }} />{l}</span>)}
           <span className="mute"><i style={{ display: 'inline-block', width: 14, height: 3, background: '#22c55e', marginRight: 4, verticalAlign: 'middle' }} />Est. expenditure (base + steps + exercise)</span>
-          <span className="dim">Bar height = kcal from each macro · tap a day to open it</span>
+          <span className="dim">Faded bars = daily totals imported from Fitbit · tap a day to open it</span>
         </div>
       </div>
 

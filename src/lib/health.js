@@ -29,6 +29,18 @@ export async function importHealthCSV(uid, text, { since } = {}) {
     await putMany(uid, 'activity', items);
     return { kind: 'activity days', count: items.length };
   }
+  if (head.includes('Nutrition calories (kcal)')) {   // Nutrition tab: daily totals logged in Fitbit etc.
+    rows.forEach(r => {
+      const date = r.Date;
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date || '') || (since && date < since)) return;
+      const kcal = num(r['Nutrition calories (kcal)']) || 0;
+      if (!kcal) return;
+      // several sources can report the same day: keep the largest total rather than adding (avoids double counting)
+      if (!byDay[date] || kcal > byDay[date].kcal) byDay[date] = { date, kcal, p: num(r['Protein (g)']) || 0, f: num(r['Fat (g)']) || 0, c: num(r['Carbs (g)']) || 0 };
+    });
+    await putMany(uid, 'nutrition', Object.values(byDay).map(x => ({ id: x.date, data: x })));
+    return { kind: 'nutrition days', count: Object.keys(byDay).length };
+  }
   if (head.includes('Weight(kg)')) {           // own spreadsheet: Date, Weight(kg), Navel(cm), Waist(cm) with comma decimals and "Null"
     rows.forEach(r => {
       const date = r.Date;
@@ -46,7 +58,7 @@ export async function importHealthCSV(uid, text, { since } = {}) {
 
 // Fetches the published-CSV links and imports them. First run = everything, later runs = last 10 days.
 export async function syncSheets(uid, settings) {
-  const urls = [settings.sheetBody, settings.sheetActivity].filter(Boolean);
+  const urls = [settings.sheetBody, settings.sheetActivity, settings.sheetNutrition].filter(Boolean);
   if (!urls.length) return null;
   const since = settings.lastSync ? addDays(todayStr(), -10) : undefined;
   const parts = [];
