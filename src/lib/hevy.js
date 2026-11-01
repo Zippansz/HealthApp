@@ -47,3 +47,52 @@ export function mergeByDate(workouts) {
   }
   return [...days.values()].map(({ titles, ...d }) => ({ ...d, title: titles.join(' + ') }));
 }
+
+// Parses the text Hevy produces with "Share → Copy" (title, date line, exercise blocks with "Set 1: 35 kg x 28").
+// Uses the same id formula as the CSV import, so a later CSV import of the same workout never duplicates it.
+const TYPES = { drop: 'dropset', dropset: 'dropset', 'warm-up': 'warmup', warmup: 'warmup', failure: 'failure' };
+function parseShareDate(s) {
+  const m = /(\w{3})\w*\s+(\d{1,2}),\s*(\d{4})\s+at\s+(\d{1,2}):(\d{2})\s*([ap]m)?/i.exec(s || '');
+  if (!m || !MONTHS[m[1]]) return null;
+  let h = +m[4];
+  const ap = (m[6] || '').toLowerCase();
+  if (ap === 'pm' && h < 12) h += 12;
+  if (ap === 'am' && h === 12) h = 0;
+  const p = x => String(x).padStart(2, '0');
+  return `${m[3]}-${p(MONTHS[m[1]])}-${p(m[2])}T${p(h)}:${m[5]}`;
+}
+const toSec = t => t.split(':').reduce((a, x) => a * 60 + +x, 0);
+function parseSet(body) {
+  const set = { type: 'normal', kg: null, reps: null, dist: null, sec: null, rpe: null };
+  const tag = /\[([^\]]+)\]/.exec(body);
+  if (tag) set.type = TYPES[tag[1].trim().toLowerCase()] || 'normal';
+  const b = body.replace(/\[[^\]]*\]/g, '').trim();
+  let m;
+  if ((m = /@\s*([\d.,]+)\s*rpe/i.exec(b))) set.rpe = n(m[1]);
+  if ((m = /([\d.,]+)\s*(kg|lbs?)\s*x\s*(\d+)/i.exec(b))) {
+    set.kg = n(m[1]); if (/lb/i.test(m[2])) set.kg = Math.round(set.kg * 0.45359237 * 10) / 10;
+    set.reps = n(m[3]);
+  } else if ((m = /^(\d+)\s*reps?/i.exec(b))) set.reps = n(m[1]);
+  if ((m = /([\d.,]+)\s*km/i.exec(b))) set.dist = n(m[1]);
+  if ((m = /(\d+:\d{2}(?::\d{2})?)/.exec(b))) set.sec = toSec(m[1]);
+  return set;
+}
+export function parseHevyText(text) {
+  const lines = (text || '').split(/\r?\n/).map(l => l.trim());
+  const title = lines.find(Boolean);
+  const start = lines.map(parseShareDate).find(Boolean);
+  if (!title || !start) throw new Error('Could not find the workout title and date. Paste the whole text from Hevy.');
+  const w = { title, date: start.slice(0, 10), start, end: null, description: '', exercises: [] };
+  let ex = null;
+  for (const l of lines) {
+    const s = /^Set\s+\d+\s*:\s*(.+)$/i.exec(l);
+    if (s) {
+      if (ex) ex.sets.push(parseSet(s[1]));
+    } else if (l && l !== title && !parseShareDate(l) && !/^@hevy|^https?:\/\//i.test(l)) {
+      ex = { name: l, notes: '', sets: [] }; w.exercises.push(ex);
+    }
+  }
+  w.exercises = w.exercises.filter(e => e.sets.length);
+  if (!w.exercises.length) throw new Error('No sets found in the pasted text.');
+  return { id: hash(`${title}|${start}`), data: w };
+}

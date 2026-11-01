@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import Chart from '../Chart';
 import { useCollection, putMany } from '../lib/db';
-import { parseHevy, mergeByDate } from '../lib/hevy';
+import { parseHevy, parseHevyText, mergeByDate } from '../lib/hevy';
 import { e1rm, fmt, withMA } from '../lib/calc';
 import MuscleDash from './MuscleDash';
 
@@ -36,6 +36,19 @@ export default function Training({ uid, settings }) {
   const [q, setQ] = useState('');
   const [msg, setMsg] = useState('');
   const [busy, setBusy] = useState(false);
+  const [paste, setPaste] = useState('');
+  const [pmsg, setPmsg] = useState('');
+
+  const onPaste = async () => {
+    setPmsg('');
+    try {
+      const item = parseHevyText(paste);
+      await putMany(uid, 'workouts', [item]);
+      const sets = item.data.exercises.reduce((a, e) => a + e.sets.length, 0);
+      setPmsg(`Saved "${item.data.title}" (${item.data.date}): ${item.data.exercises.length} exercises, ${sets} sets.`);
+      setPaste('');
+    } catch (err) { setPmsg('Could not save: ' + err.message); }
+  };
 
   const norm = useMemo(() => mergeByDate(workouts), [workouts]);
   const ma = useMemo(() => withMA(meas), [meas]);
@@ -83,6 +96,14 @@ export default function Training({ uid, settings }) {
       <div className="row sp" style={{ marginBottom: 12 }}><h2>Training</h2><span className="mute" style={{ fontSize: 13 }}>{norm.length} workouts · {thisYear} in last 30 days</span></div>
 
       <MuscleDash workouts={norm} />
+
+      <div className="card">
+        <h3 style={{ marginBottom: 8 }}>Paste a workout</h3>
+        <div className="dim" style={{ fontSize: 13, marginBottom: 8 }}>In Hevy: open the workout → Share → Copy, then paste here. Saving the same workout twice is safe.</div>
+        <textarea value={paste} onChange={e => setPaste(e.target.value)} placeholder={'Hemma - Full Body\nSunday, Nov 01, 2026 at 2:29pm\n\nRdl To Row (Barbell)\nSet 1: 35 kg x 28'} style={{ minHeight: 110 }} />
+        <button onClick={onPaste} disabled={!paste.trim()} style={{ marginTop: 8 }}>Save workout</button>
+        {pmsg && <div className="msg">{pmsg}</div>}
+      </div>
 
       <div className="card">
         <h3 style={{ marginBottom: 8 }}>Import from Hevy</h3>
