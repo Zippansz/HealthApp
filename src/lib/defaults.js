@@ -4,6 +4,8 @@ export const DEFAULTS = {
   start: { weight: 81.8, navel: 98, waist: 94, bf: 27.9, whtr: 0.554 },
   goal: { weight: 75, navel: 85, waist: 84, bf: 17.5, whtr: 0.488 },
   baseTdee: 2200,
+  stepsBaseline: 5000, // steps per day already included in the base TDEE
+  kcalPerStep: 0.04,
   modes: {
     cutting: { label: 'Cutting', p: 160, kcalMin: 1700, kcalMax: 1900, fMax: 90, cMax: 120 },
     maintenance: { label: 'Maintenance', p: 160, kcalMin: 2200, kcalMax: 2400, fMax: 100, cMax: 250 },

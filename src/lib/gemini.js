@@ -63,7 +63,7 @@ Today's logged meals: ${context || 'none'}`;
 export async function extractTape({ key, model, base64, mime }) {
   if (!key) throw new Error('No Gemini key yet. Add it in Settings.');
   const num = { type: 'NUMBER', nullable: true };
-  const fields = ['waist', 'abdomen', 'hip', 'neck', 'shoulder', 'chest', 'bicepL', 'bicepR', 'thighL', 'thighR', 'calfL', 'calfR'];
+  const fields = ['waist', 'abdomen', 'hip', 'glutes', 'neck', 'shoulder', 'chest', 'bicepL', 'bicepR', 'thighL', 'thighR', 'calfL', 'calfR'];
   const schema = { type: 'OBJECT', properties: Object.fromEntries(fields.map(f => [f, num])) };
   const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
     method: 'POST',

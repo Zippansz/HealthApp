@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { useCollection, put, remove, saveSettings } from '../lib/db';
-import { todayStr, addDays, num, phaseFor } from '../lib/calc';
+import { todayStr, addDays, num, phaseFor, expenditure } from '../lib/calc';
 import { askGemini } from '../lib/gemini';
 import { applyActions, describe } from '../lib/actions';
 import Bars, { MACRO_COLORS } from '../Bars';
@@ -41,7 +41,7 @@ export default function Intake({ uid, settings }) {
   const dayMeals = useMemo(() => meals.filter(m => m.date === date).sort((a, b) => (a.ts || 0) - (b.ts || 0)), [meals, date]);
   const act = acts.find(a => a.id === date) || {};
   const tot = dayMeals.reduce((t, m) => ({ p: t.p + (m.p || 0), f: t.f + (m.f || 0), c: t.c + (m.c || 0), kcal: t.kcal + (m.kcal || 0) }), { p: 0, f: 0, c: 0, kcal: 0 });
-  const burn = settings.baseTdee + (act.kcal || 0);
+  const burn = expenditure(settings, act);
   const balance = tot.kcal - burn;
 
   const last14 = useMemo(() => Array.from({ length: 14 }, (_, i) => {
@@ -49,6 +49,7 @@ export default function Intake({ uid, settings }) {
     const t = meals.filter(m => m.date === d).reduce((a, m) => ({ p: a.p + (m.p || 0), f: a.f + (m.f || 0), c: a.c + (m.c || 0) }), { p: 0, f: 0, c: 0 });
     return { date: d, ...t };
   }), [meals]);
+  const expTrace = last14.map(d => { const a = acts.find(x => x.id === d.date); return a ? expenditure(settings, a) : null; });
 
   const frequent = useMemo(() => {
     const m = new Map();
@@ -98,16 +99,6 @@ export default function Intake({ uid, settings }) {
       </div>
 
       <div className="card">
-        <h3 style={{ marginBottom: 6 }}>Last 14 days</h3>
-        <Bars days={last14} picked={date} onPick={setDate}
-          lines={[{ y: mode.p * 4, color: '#7dd3fc', label: `Protein target ${mode.p} g` }, { y: mode.kcalMax, color: '#ef4444', label: `Max ${mode.kcalMax} kcal` }]} />
-        <div className="row" style={{ fontSize: 12, marginTop: 4 }}>
-          {[['p', 'Protein'], ['c', 'Carbs'], ['f', 'Fat']].map(([k, l]) => <span key={k} className="mute"><i style={{ display: 'inline-block', width: 10, height: 10, background: MACRO_COLORS[k], borderRadius: 2, marginRight: 4 }} />{l}</span>)}
-          <span className="dim">Bar height = kcal from each macro · tap a day to open it</span>
-        </div>
-      </div>
-
-      <div className="card">
         <div className="row sp" style={{ marginBottom: 10 }}>
           <h3>Targets · {phase ? phase.name : 'no phase'}</h3>
           <select value={modeKey || phase?.mode || 'maintenance'} onChange={e => setModeKey(e.target.value)} style={{ width: 150 }}>
@@ -119,7 +110,7 @@ export default function Intake({ uid, settings }) {
         <Meter label="Fat" val={tot.f} max={mode.fMax} unit=" g" />
         <Meter label="Carbs" val={tot.c} max={mode.cMax} unit=" g" />
         <div className="row sp mute" style={{ fontSize: 13 }}>
-          <span>Burn ≈ {Math.round(burn)} kcal ({settings.baseTdee} base{act.kcal ? ` + ${act.kcal} exercise` : ''}){act.steps ? ` · ${act.steps} steps` : ''}</span>
+          <span>Burn ≈ {Math.round(burn)} kcal ({settings.baseTdee} base{act.steps ? ` + ${Math.round(burn - settings.baseTdee - (act.kcal || 0))} steps` : ''}{act.kcal ? ` + ${act.kcal} exercise` : ''}){act.steps ? ` · ${act.steps} steps` : ' · no steps logged (Training tab)'}</span>
           <b className={balance > 0 ? 'a' : 'g'}>{balance > 0 ? '+' : ''}{Math.round(balance)} kcal</b>
         </div>
       </div>
@@ -140,15 +131,6 @@ export default function Intake({ uid, settings }) {
           </div>
         )}
       </div>
-
-      {(settings.favorites.length > 0 || frequent.length > 0) && (
-        <div className="card">
-          {settings.favorites.length > 0 && <><h3 style={{ marginBottom: 8 }}>Favorites</h3>
-            {settings.favorites.map(f => <span key={f.name} className="chip"><span onClick={() => quick(f)}>★ {f.name} · {f.amount || Math.round(f.kcal) + ' kcal'}</span><span onClick={() => window.confirm('Remove favorite "' + f.name + '"?') && saveSettings(uid, { favorites: settings.favorites.filter(x => x.name !== f.name) })} style={{ marginLeft: 10, padding: '0 4px', color: '#fca5a5' }}>✕</span></span>)}</>}
-          {frequent.length > 0 && <><h3 style={{ margin: '8px 0' }}>Often eaten</h3>
-            {frequent.map(f => <span key={f.name} className="chip" onClick={() => quick(f)}>+ {f.name} · {Math.round(f.kcal)}</span>)}</>}
-        </div>
-      )}
 
       <div className="card">
         <h3 style={{ marginBottom: 6 }}>Meals · {date}</h3>
@@ -171,13 +153,27 @@ export default function Intake({ uid, settings }) {
         </details>
       </div>
 
+      {(settings.favorites.length > 0 || frequent.length > 0) && (
+        <div className="card">
+          {settings.favorites.length > 0 && <><h3 style={{ marginBottom: 8 }}>Favorites</h3>
+            {settings.favorites.map(f => <span key={f.name} className="chip"><span onClick={() => quick(f)}>★ {f.name} · {f.amount || Math.round(f.kcal) + ' kcal'}</span><span onClick={() => window.confirm('Remove favorite "' + f.name + '"?') && saveSettings(uid, { favorites: settings.favorites.filter(x => x.name !== f.name) })} style={{ marginLeft: 10, padding: '0 4px', color: '#fca5a5' }}>✕</span></span>)}</>}
+          {frequent.length > 0 && <><h3 style={{ margin: '8px 0' }}>Often eaten</h3>
+            {frequent.map(f => <span key={f.name} className="chip" onClick={() => quick(f)}>+ {f.name} · {Math.round(f.kcal)}</span>)}</>}
+        </div>
+      )}
+
       <div className="card">
-        <h3 style={{ marginBottom: 8 }}>Activity · {date}</h3>
-        <div className="f2">
-          <input inputMode="numeric" placeholder="Exercise kcal" defaultValue={act.kcal ?? ''} key={date + 'k' + act.kcal} onBlur={e => num(e.target.value) != null && put(uid, 'activity', date, { date, kcal: num(e.target.value) })} />
-          <input inputMode="numeric" placeholder="Steps" defaultValue={act.steps ?? ''} key={date + 's' + act.steps} onBlur={e => num(e.target.value) != null && put(uid, 'activity', date, { date, steps: num(e.target.value) })} />
+        <h3 style={{ marginBottom: 6 }}>Last 14 days</h3>
+        <Bars days={last14} picked={date} onPick={setDate}
+          trace={{ values: expTrace, color: '#22c55e', label: 'Est. expenditure' }}
+          lines={[{ y: mode.p * 4, color: '#7dd3fc', label: `Protein target ${mode.p} g` }, { y: mode.kcalMax, color: '#ef4444', label: `Max ${mode.kcalMax} kcal` }]} />
+        <div className="row" style={{ fontSize: 12, marginTop: 4 }}>
+          {[['p', 'Protein'], ['c', 'Carbs'], ['f', 'Fat']].map(([k, l]) => <span key={k} className="mute"><i style={{ display: 'inline-block', width: 10, height: 10, background: MACRO_COLORS[k], borderRadius: 2, marginRight: 4 }} />{l}</span>)}
+          <span className="mute"><i style={{ display: 'inline-block', width: 14, height: 3, background: '#22c55e', marginRight: 4, verticalAlign: 'middle' }} />Est. expenditure (base + steps + exercise)</span>
+          <span className="dim">Bar height = kcal from each macro · tap a day to open it</span>
         </div>
       </div>
+
     </>
   );
 }

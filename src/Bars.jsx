@@ -5,12 +5,12 @@ export const MACRO_COLORS = { p: '#38bdf8', c: '#f59e0b', f: '#a78bfa' };
 
 // Stacked daily bars in kcal: protein at the bottom, then carbs, then fat.
 // days: [{date, p, f, c}] (grams)   lines: [{y (kcal), color, label}]
-export default function Bars({ days, lines = [], height = 300, onPick, picked }) {
+export default function Bars({ days, lines = [], trace, height = 300, onPick, picked }) {
   const [ref, W] = useWidth();
   const H = height, L = 44, R = 8, T = 16, B = 38;
   const kc = d => ({ p: d.p * 4, c: d.c * 4, f: d.f * 9 });
   const tot = d => { const k = kc(d); return k.p + k.c + k.f; };
-  const sc = niceScale(0, Math.max(...days.map(tot), ...lines.map(l => l.y), 500) * 1.05, 6, true);
+  const sc = niceScale(0, Math.max(...days.map(tot), ...lines.map(l => l.y), ...(trace ? trace.values.filter(v => v != null) : []), 500) * 1.05, 6, true);
   const yMax = sc.hi;
   const Y = v => T + (1 - v / yMax) * (H - T - B);
   const bw = (W - L - R) / days.length;
@@ -31,6 +31,11 @@ export default function Bars({ days, lines = [], height = 300, onPick, picked })
           </g>
         );
       })}
+      {trace && (() => {
+        const pts = trace.values.map((v, i) => (v == null ? null : [L + i * bw + bw / 2, Y(v)])).filter(Boolean);
+        return <g><polyline fill="none" stroke={trace.color} strokeWidth="2.2" strokeLinejoin="round" points={pts.map(q => q.join(',')).join(' ')} />
+          {pts.map((q, i) => <circle key={i} cx={q[0]} cy={q[1]} r="3" fill={trace.color} stroke="#020617" strokeWidth="1" />)}</g>;
+      })()}
       {lines.map((l, i) => (
         <g key={i}><line x1={L} x2={W - R} y1={Y(l.y)} y2={Y(l.y)} stroke={l.color} strokeWidth="1.8" strokeDasharray="6 4" />
           <text x={W - R - 2} y={Y(l.y) - 4} fontSize="12" textAnchor="end" fill={l.color} fontWeight="600">{l.label}</text></g>

@@ -53,3 +53,9 @@ export function downloadFile(name, text, type = 'application/json') {
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
+
+// Estimated daily expenditure: base TDEE + steps above the steps already assumed in the base + logged exercise kcal.
+export const expenditure = (settings, act = {}) =>
+  settings.baseTdee
+  + (act.steps ? Math.max(0, act.steps - (settings.stepsBaseline ?? 5000)) * (settings.kcalPerStep ?? 0.04) : 0)
+  + (act.kcal || 0);

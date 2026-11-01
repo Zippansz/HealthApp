@@ -75,13 +75,6 @@ export default function Measurements({ uid, settings }) {
   const rate = slopeM == null ? null : slopeM;
   const good = rate == null || M.goal == null ? null : (M.goal < M.start ? rate < 0 : rate > 0);
 
-  const save = async () => {
-    const patch = { date: form.date };
-    ['weight', 'waist', 'navel'].forEach(k => { const v = num(form[k]); if (v != null) patch[k] = v; });
-    if (Object.keys(patch).length < 2) return;
-    await put(uid, 'measurements', form.date, patch);
-    setForm({ ...form, weight: '', waist: '', navel: '' });
-  };
   const importPaste = async () => {
     // Excel format: YYYY-MM-DD <TAB> weight <TAB> navel <TAB> waist   (comma decimals are fine)
     const items = [];
@@ -109,12 +102,14 @@ export default function Measurements({ uid, settings }) {
     } catch (err) { setTapeMsg(err.message); }
     setReading(false); e.target.value = '';
   };
-  const saveTape = async () => {
-    const patch = { date: tape.date };
+  const saveAll = async () => {
+    const patch = { date: form.date };
+    ['weight', 'waist', 'navel'].forEach(k => { const v = num(form[k]); if (v != null) patch[k] = v; });
     TAPE.forEach(([k]) => { const v = num(tape[k]); if (v != null) patch[k] = v; });
     if (Object.keys(patch).length < 2) return;
-    await put(uid, 'measurements', tape.date, patch);
-    setTape({ date: tape.date }); setTapeMsg('Saved ✓');
+    await put(uid, 'measurements', form.date, patch);
+    setForm({ ...form, weight: '', waist: '', navel: '' });
+    setTape({ date: form.date }); setTapeMsg('Saved ✓'); setTimeout(() => setTapeMsg(''), 2000);
   };
 
   const months = useMemo(() => {
@@ -151,17 +146,7 @@ export default function Measurements({ uid, settings }) {
             <Stat key={k} active={sel === k} onClick={() => pick(k)} label={l} value={tapeLast(k)} unit="cm" digits={1} sub={Math.abs(d) < 0.05 ? 'no change since first' : `${d > 0 ? '+' : ''}${d.toFixed(1)} cm since first`} />); })}
           {lastWhr != null && <Stat active={sel === 'whr'} onClick={() => pick('whr')} label="Waist–hip ratio" value={lastWhr} unit="" digits={2} sub={`${whrRows.length} measurements`} />}
         </div>
-        {tapeRows.length === 0 && <div className="dim" style={{ marginBottom: 10 }}>No body-part measurements yet.</div>}
-        <h3 style={{ margin: '8px 0' }}>Add</h3>
-        <div className="dim" style={{ fontSize: 13, marginBottom: 8 }}>Upload a screenshot of the Renpho body-part screen and the numbers are read for you, or type them in.</div>
-        <input type="file" accept="image/*" onChange={readShot} disabled={reading} />
-        {reading && <div className="mute">Reading…</div>}
-        <div className="f3" style={{ margin: '10px 0' }}>
-          <Field2 label="Date"><input type="date" value={tape.date} onChange={e => setTape({ ...tape, date: e.target.value })} /></Field2>
-          {TAPE.map(([k, l]) => <Field2 key={k} label={l + ' cm'}><input inputMode="decimal" value={tape[k] ?? ''} onChange={e => setTape({ ...tape, [k]: e.target.value })} /></Field2>)}
-        </div>
-        <button className="pri" onClick={saveTape}>Save</button>
-        {tapeMsg && <div className="msg">{tapeMsg}</div>}
+        {tapeRows.length === 0 && <div className="dim">No body-part measurements yet. Add them in the form above.</div>}
       </details>
 
       <div className="card" ref={chartRef}>
@@ -185,7 +170,17 @@ export default function Measurements({ uid, settings }) {
           <input inputMode="decimal" placeholder="Waist cm" value={form.waist} onChange={e => setForm({ ...form, waist: e.target.value })} />
           <input inputMode="decimal" placeholder="Navel cm" value={form.navel} onChange={e => setForm({ ...form, navel: e.target.value })} />
         </div>
-        <button className="pri" onClick={save}>Save</button>
+        <details style={{ margin: '10px 0' }}>
+          <summary>Body parts (screenshot or type)</summary>
+          <div className="dim" style={{ fontSize: 13, margin: '6px 0' }}>Upload a screenshot of the Renpho body-part screen and the numbers are read for you, or type them in.</div>
+          <input type="file" accept="image/*" onChange={readShot} disabled={reading} />
+          {reading && <div className="mute">Reading…</div>}
+          <div className="f3" style={{ margin: '10px 0' }}>
+            {TAPE.map(([k, l]) => <Field2 key={k} label={l + ' cm'}><input inputMode="decimal" value={tape[k] ?? ''} onChange={e => setTape({ ...tape, [k]: e.target.value })} /></Field2>)}
+          </div>
+        </details>
+        <button className="pri" onClick={saveAll}>Save</button>
+        {tapeMsg && <div className="msg">{tapeMsg}</div>}
         <details style={{ marginTop: 10 }}><summary>Paste from Excel</summary>
           <div className="dim" style={{ fontSize: 12, marginBottom: 6 }}>One row per line: date (YYYY-MM-DD), weight, navel, waist – separated by tabs. Comma decimals work.</div>
           <textarea value={paste} onChange={e => setPaste(e.target.value)} />

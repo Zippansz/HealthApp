@@ -1,8 +1,8 @@
 import React, { useMemo, useState } from 'react';
 import Chart from '../Chart';
-import { useCollection, putMany } from '../lib/db';
+import { useCollection, putMany, put } from '../lib/db';
 import { parseHevy, parseHevyText, mergeByDate } from '../lib/hevy';
-import { e1rm, fmt, withMA } from '../lib/calc';
+import { e1rm, fmt, withMA, todayStr, addDays, num, expenditure } from '../lib/calc';
 import MuscleDash from './MuscleDash';
 
 // Per-exercise stats from all workouts.
@@ -33,6 +33,17 @@ export default function Training({ uid, settings }) {
   const workouts = useCollection(uid, 'workouts');
   const meas = useCollection(uid, 'measurements');
   const [sel, setSel] = useState(null);
+  const acts = useCollection(uid, 'activity', { since: addDays(todayStr(), -30) });
+  const [aDate, setADate] = useState(todayStr());
+  const aCur = acts.find(a => a.id === aDate) || {};
+  const [aSteps, setASteps] = useState(''), [aKcal, setAKcal] = useState('');
+  React.useEffect(() => { setASteps(aCur.steps ?? ''); setAKcal(aCur.kcal ?? ''); }, [aDate, aCur.steps, aCur.kcal]);
+  const saveAct = async () => {
+    const patch = { date: aDate };
+    if (num(aSteps) != null) patch.steps = num(aSteps);
+    if (num(aKcal) != null) patch.kcal = num(aKcal);
+    if (Object.keys(patch).length > 1) await put(uid, 'activity', aDate, patch);
+  };
   const [q, setQ] = useState('');
   const [msg, setMsg] = useState('');
   const [busy, setBusy] = useState(false);
@@ -94,6 +105,21 @@ export default function Training({ uid, settings }) {
   return (
     <>
       <div className="row sp" style={{ marginBottom: 12 }}><h2>Training</h2><span className="mute" style={{ fontSize: 13 }}>{norm.length} workouts · {thisYear} in last 30 days</span></div>
+
+      <div className="card">
+        <h3 style={{ marginBottom: 8 }}>Daily activity</h3>
+        <div className="f3" style={{ marginBottom: 8 }}>
+          <input type="date" value={aDate} onChange={e => setADate(e.target.value)} />
+          <input inputMode="numeric" placeholder="Steps" value={aSteps} onChange={e => setASteps(e.target.value)} />
+          <input inputMode="numeric" placeholder="Exercise kcal" value={aKcal} onChange={e => setAKcal(e.target.value)} />
+        </div>
+        <button className="pri" onClick={saveAct}>Save</button>
+        <div className="dim" style={{ fontSize: 12, margin: '8px 0 4px' }}>Steps also arrive automatically from the Health Data Export sync. Estimated expenditure = base TDEE + steps above your baseline + exercise kcal (set in Settings).</div>
+        <details><summary>Last days</summary>
+          <table><thead><tr><th>Date</th><th>Steps</th><th>Exercise kcal</th><th>Est. burn</th></tr></thead><tbody>
+            {[...acts].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 14).map(a => <tr key={a.id}><td>{a.date.slice(5)}</td><td>{a.steps ?? '–'}</td><td>{a.kcal ?? '–'}</td><td>{Math.round(expenditure(settings, a))}</td></tr>)}
+          </tbody></table></details>
+      </div>
 
       <MuscleDash workouts={norm} />
 
