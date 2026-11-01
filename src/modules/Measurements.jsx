@@ -95,6 +95,12 @@ export default function Measurements({ uid, settings }) {
   const tapeLast = k => [...tapeRows].reverse().find(r => r[k] != null)?.[k];
   const lastWhr = (() => { const r = [...tapeRows].reverse().find(x => x.t_waist && x.t_hip); return r ? r.t_waist / r.t_hip : null; })();
 
+  const months = useMemo(() => {
+    const m = new Map();
+    [...data].reverse().forEach(r => { const k = r.date.slice(0, 7); if (!m.has(k)) m.set(k, []); m.get(k).push(r); });
+    return [...m.entries()];
+  }, [data]);
+
   const bands = settings.phases.map(p => ({ start: p.start, end: p.end, color: MODE_COLORS[p.mode] || '#888', label: p.name }));
   const weightPts = data.filter(r => r.weight != null).map(r => ({ x: r.date, y: r.weight }));
   const delta = lastMA ? lastMA.ma - settings.start.weight : null;
@@ -163,11 +169,23 @@ export default function Measurements({ uid, settings }) {
 
       <div className="card">
         <h3 style={{ marginBottom: 6 }}>History</h3>
-        <table><thead><tr><th>Date</th><th>Weight</th><th>Navel</th><th>Waist</th><th>BF scale</th><th></th></tr></thead>
-          <tbody>{data.slice(-40).reverse().map(r => (
-            <tr key={r.id}><td>{r.date}</td><td>{fmt(r.weight, 1)}</td><td>{fmt(r.navel, 1)}</td><td>{fmt(r.waist, 1)}</td><td>{fmt(r.bf, 1)}</td>
-              <td><button className="sm danger" onClick={() => window.confirm('Delete ' + r.date + '?') && remove(uid, 'measurements', r.id)}>✕</button></td></tr>))}
-          </tbody></table>
+        {months.length === 0 && <div className="dim">No measurements yet.</div>}
+        {months.map(([ym, list], mi) => {
+          const ws = list.filter(r => r.weight != null).map(r => r.weight);
+          const avg = ws.length ? ws.reduce((x, y) => x + y, 0) / ws.length : null;
+          return (
+            <details key={ym} open={mi === 0} style={{ borderTop: '1px solid #1e293b' }}>
+              <summary style={{ display: 'flex', justifyContent: 'space-between', gap: 8, padding: '10px 0' }}>
+                <b style={{ color: 'var(--text)' }}>{new Date(ym + '-15T12:00:00').toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })}</b>
+                <span className="dim" style={{ fontSize: 13 }}>{list.length} days{avg != null ? ` · avg ${avg.toFixed(1)} kg` : ''}</span>
+              </summary>
+              <table style={{ marginBottom: 8 }}><thead><tr><th>Date</th><th>Weight</th><th>Navel</th><th>Waist</th><th>BF scale</th><th></th></tr></thead>
+                <tbody>{list.map(r => (
+                  <tr key={r.id}><td>{r.date.slice(5)}</td><td>{fmt(r.weight, 1)}</td><td>{fmt(r.navel, 1)}</td><td>{fmt(r.waist, 1)}</td><td>{fmt(r.bf, 1)}</td>
+                    <td><button className="sm danger" onClick={() => window.confirm('Delete ' + r.date + '?') && remove(uid, 'measurements', r.id)}>✕</button></td></tr>))}
+                </tbody></table>
+            </details>);
+        })}
       </div>
     </>
   );
