@@ -3,6 +3,7 @@ import Chart from '../Chart';
 import { useCollection, putMany } from '../lib/db';
 import { parseHevy, mergeByDate } from '../lib/hevy';
 import { e1rm, fmt, withMA } from '../lib/calc';
+import MuscleDash from './MuscleDash';
 
 // Per-exercise stats from all workouts.
 export function exerciseStats(workouts, bwAt) {
@@ -80,6 +81,8 @@ export default function Training({ uid, settings }) {
   return (
     <>
       <div className="row sp" style={{ marginBottom: 12 }}><h2>Training</h2><span className="mute" style={{ fontSize: 13 }}>{norm.length} workouts · {thisYear} in last 30 days</span></div>
+
+      <MuscleDash workouts={norm} />
 
       <div className="card">
         <h3 style={{ marginBottom: 8 }}>Import from Hevy</h3>
