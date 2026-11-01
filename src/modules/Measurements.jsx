@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import Chart from '../Chart';
 import { useCollection, put, remove, putMany } from '../lib/db';
 import { MODE_COLORS } from '../lib/defaults';
@@ -6,14 +6,14 @@ import { TAPE } from '../lib/tape';
 import { extractTape } from '../lib/gemini';
 import { todayStr, addDays, daysBetween, num, fmt, rfm, whtr, withMA, slopePerWeek, phaseFor } from '../lib/calc';
 
-function Stat({ label, value, unit, goal, start, cur, lowerIsBetter = true, digits = 1, active, onClick }) {
+function Stat({ label, value, unit, goal, start, cur, lowerIsBetter = true, digits = 1, active, onClick, sub }) {
   let pct = null;
   if (cur != null && goal != null && start != null && start !== goal) pct = Math.max(0, Math.min(100, ((start - cur) / (start - goal)) * 100));
   return (
     <div className="card stat" onClick={onClick} style={{ marginBottom: 0, cursor: 'pointer', borderColor: active ? 'var(--blue)' : undefined, boxShadow: active ? '0 0 0 1px var(--blue)' : undefined }}>
       <div className="lbl">{label}{active ? ' · shown' : ''}</div>
       <div className="v">{fmt(value, digits)}<span className="mute" style={{ fontSize: 13 }}> {unit}</span></div>
-      <div className="s">Goal {fmt(goal, digits)} {unit}</div>
+      <div className="s">{sub != null ? sub : `Goal ${fmt(goal, digits)} ${unit}`}</div>
       {pct != null && <div className="bar" style={{ marginTop: 6 }}><i style={{ width: pct + '%', background: 'var(--green)' }} /></div>}
     </div>
   );
@@ -50,6 +50,16 @@ export default function Measurements({ uid, settings }) {
     whtr: { label: 'Waist-to-height', unit: '', digits: 3, yPad: 0.01, get: r => whtr(h, r.navel), goal: goal.whtr, start: settings.start.whtr },
     scale: { label: 'Body fat (scale)', unit: '%', digits: 1, yPad: 0.5, get: r => r.bf, goal: phase?.bf ?? goal.bf, start: settings.start.bf },
   };
+  const tapeRows = data.filter(r => TAPE.some(([k]) => r[k] != null));
+  const tapeFirst = k => tapeRows.find(r => r[k] != null)?.[k];
+  const tapeLast = k => [...tapeRows].reverse().find(r => r[k] != null)?.[k];
+  const whrOf = r => (r.t_waist && r.t_hip ? r.t_waist / r.t_hip : null);
+  const whrRows = data.filter(r => whrOf(r) != null);
+  const lastWhr = whrRows.length ? whrOf(whrRows.at(-1)) : null;
+  TAPE.forEach(([k, l]) => { METRICS[k] = { label: l, unit: 'cm', digits: 1, yPad: 1, get: r => r[k], goal: null, start: tapeFirst(k) }; });
+  METRICS.whr = { label: 'Waist–hip ratio', unit: '', digits: 2, yPad: 0.01, get: whrOf, goal: null, start: whrRows.length ? whrOf(whrRows[0]) : null };
+  const chartRef = useRef(null);
+  const pick = k => { setSel(k); setTimeout(() => chartRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 60); };
   const M = METRICS[sel] || METRICS.weight;
   const pts = data.map(r => ({ date: r.date, v: M.get(r) })).filter(r => r.v != null && Number.isFinite(r.v));
   const maM = withMA(pts, 'v');
@@ -63,7 +73,7 @@ export default function Measurements({ uid, settings }) {
   }
   const projSeries = proj != null ? [{ x: lastM.date, y: lastM.ma }, { x: projEnd, y: proj }] : [];
   const rate = slopeM == null ? null : slopeM;
-  const good = rate != null && (M.goal < M.start ? rate < 0 : rate > 0);
+  const good = rate == null || M.goal == null ? null : (M.goal < M.start ? rate < 0 : rate > 0);
 
   const save = async () => {
     const patch = { date: form.date };
@@ -106,10 +116,6 @@ export default function Measurements({ uid, settings }) {
     await put(uid, 'measurements', tape.date, patch);
     setTape({ date: tape.date }); setTapeMsg('Saved ✓');
   };
-  const tapeRows = data.filter(r => TAPE.some(([k]) => r[k] != null));
-  const tapeFirst = k => tapeRows.find(r => r[k] != null)?.[k];
-  const tapeLast = k => [...tapeRows].reverse().find(r => r[k] != null)?.[k];
-  const lastWhr = (() => { const r = [...tapeRows].reverse().find(x => x.t_waist && x.t_hip); return r ? r.t_waist / r.t_hip : null; })();
 
   const months = useMemo(() => {
     const m = new Map();
@@ -118,7 +124,7 @@ export default function Measurements({ uid, settings }) {
   }, [data]);
 
   const bands = settings.phases.map(p => ({ start: p.start, end: p.end, color: MODE_COLORS[p.mode] || '#888', label: p.name }));
-  const delta = lastM ? lastM.ma - M.start : null;
+  const delta = lastM && M.start != null ? lastM.ma - M.start : null;
 
   return (
     <>
@@ -127,24 +133,47 @@ export default function Measurements({ uid, settings }) {
         <div className="mute" style={{ fontSize: 13 }}>{phase ? <>Phase: <b className="g">{phase.name}</b> · ends {phase.end}</> : 'No active phase'}</div>
       </div>
       <div className="grid" style={{ marginBottom: 12 }}>
-        <Stat active={sel === 'weight'} onClick={() => setSel('weight')} label="Weight (7DMA)" value={lastMA?.ma} unit="kg" goal={phase?.weight ?? goal.weight} start={settings.start.weight} cur={lastMA?.ma} />
-        <Stat active={sel === 'navel'} onClick={() => setSel('navel')} label="Navel" value={navel} unit="cm" goal={phase?.navel ?? goal.navel} start={settings.start.navel} cur={navel} />
-        <Stat active={sel === 'waist'} onClick={() => setSel('waist')} label="Waist" value={waist} unit="cm" goal={phase?.waist ?? goal.waist} start={settings.start.waist} cur={waist} />
-        <Stat active={sel === 'rfm'} onClick={() => setSel('rfm')} label="Body fat (RFM)" value={rfm(h, navel)} unit="%" goal={phase?.bf ?? goal.bf} start={settings.start.bf} cur={rfm(h, navel)} />
-        <Stat active={sel === 'whtr'} onClick={() => setSel('whtr')} label="Waist-to-height" value={whtr(h, navel)} unit="" goal={goal.whtr} start={settings.start.whtr} cur={whtr(h, navel)} digits={3} />
-        {scaleBf != null && <Stat active={sel === 'scale'} onClick={() => setSel('scale')} label="Body fat (scale)" value={scaleBf} unit="%" goal={phase?.bf ?? goal.bf} start={settings.start.bf} cur={scaleBf} />}
+        <Stat active={sel === 'weight'} onClick={() => pick('weight')} label="Weight (7DMA)" value={lastMA?.ma} unit="kg" goal={phase?.weight ?? goal.weight} start={settings.start.weight} cur={lastMA?.ma} />
+        <Stat active={sel === 'navel'} onClick={() => pick('navel')} label="Navel" value={navel} unit="cm" goal={phase?.navel ?? goal.navel} start={settings.start.navel} cur={navel} />
+        <Stat active={sel === 'waist'} onClick={() => pick('waist')} label="Waist" value={waist} unit="cm" goal={phase?.waist ?? goal.waist} start={settings.start.waist} cur={waist} />
+        <Stat active={sel === 'rfm'} onClick={() => pick('rfm')} label="Body fat (RFM)" value={rfm(h, navel)} unit="%" goal={phase?.bf ?? goal.bf} start={settings.start.bf} cur={rfm(h, navel)} />
+        <Stat active={sel === 'whtr'} onClick={() => pick('whtr')} label="Waist-to-height" value={whtr(h, navel)} unit="" goal={goal.whtr} start={settings.start.whtr} cur={whtr(h, navel)} digits={3} />
+        {scaleBf != null && <Stat active={sel === 'scale'} onClick={() => pick('scale')} label="Body fat (scale)" value={scaleBf} unit="%" goal={phase?.bf ?? goal.bf} start={settings.start.bf} cur={scaleBf} />}
       </div>
 
-      <div className="card">
+      <details className="card" style={{ padding: 14 }}>
+        <summary style={{ display: 'flex', justifyContent: 'space-between', gap: 8, color: 'var(--text)' }}>
+          <b>Body-part measurements</b>
+          <span className="dim" style={{ fontSize: 13 }}>{TAPE.filter(([k]) => tapeLast(k) != null).length} tracked · tap to expand</span>
+        </summary>
+        <div className="grid" style={{ margin: '12px 0' }}>
+          {TAPE.filter(([k]) => tapeLast(k) != null).map(([k, l]) => { const d = tapeLast(k) - tapeFirst(k); return (
+            <Stat key={k} active={sel === k} onClick={() => pick(k)} label={l} value={tapeLast(k)} unit="cm" digits={1} sub={Math.abs(d) < 0.05 ? 'no change since first' : `${d > 0 ? '+' : ''}${d.toFixed(1)} cm since first`} />); })}
+          {lastWhr != null && <Stat active={sel === 'whr'} onClick={() => pick('whr')} label="Waist–hip ratio" value={lastWhr} unit="" digits={2} sub={`${whrRows.length} measurements`} />}
+        </div>
+        {tapeRows.length === 0 && <div className="dim" style={{ marginBottom: 10 }}>No body-part measurements yet.</div>}
+        <h3 style={{ margin: '8px 0' }}>Add</h3>
+        <div className="dim" style={{ fontSize: 13, marginBottom: 8 }}>Upload a screenshot of the Renpho body-part screen and the numbers are read for you, or type them in.</div>
+        <input type="file" accept="image/*" onChange={readShot} disabled={reading} />
+        {reading && <div className="mute">Reading…</div>}
+        <div className="f3" style={{ margin: '10px 0' }}>
+          <Field2 label="Date"><input type="date" value={tape.date} onChange={e => setTape({ ...tape, date: e.target.value })} /></Field2>
+          {TAPE.map(([k, l]) => <Field2 key={k} label={l + ' cm'}><input inputMode="decimal" value={tape[k] ?? ''} onChange={e => setTape({ ...tape, [k]: e.target.value })} /></Field2>)}
+        </div>
+        <button className="pri" onClick={saveTape}>Save</button>
+        {tapeMsg && <div className="msg">{tapeMsg}</div>}
+      </details>
+
+      <div className="card" ref={chartRef}>
         <div className="row sp"><h3>{M.label}</h3>
           <span className="mute" style={{ fontSize: 13 }}>
-            Trend {rate != null ? <b className={good ? 'g' : 'a'}>{rate > 0 ? '+' : ''}{rate.toFixed(M.digits === 3 ? 3 : 2)} {M.unit}/wk</b> : '–'}
+            Trend {rate != null ? <b className={good == null ? '' : good ? 'g' : 'a'}>{rate > 0 ? '+' : ''}{rate.toFixed(M.digits === 3 ? 3 : 2)} {M.unit}/wk</b> : '–'}
             {proj != null && <> · projected <b>{proj.toFixed(M.digits)} {M.unit}</b> by {projEnd}</>}
-            {delta != null && <> · {delta > 0 ? '+' : ''}{delta.toFixed(M.digits)} {M.unit} since start</>}
+            {delta != null && <> · {delta > 0 ? '+' : ''}{delta.toFixed(M.digits)} {M.unit} {M.goal == null ? 'since first' : 'since start'}</>}
           </span></div>
         <Chart bands={bands} yPad={M.yPad}
           series={[{ points: pts.map(r => ({ x: r.date, y: r.v })), color: '#475569', dots: true, width: 1 }, { points: maM.map(r => ({ x: r.date, y: r.ma })), color: '#38bdf8', width: 2.5 }, { points: projSeries, color: '#f59e0b', dashed: true }]}
-          hlines={[{ y: M.goal, color: '#10b981', label: 'target' }]} />
+          hlines={M.goal != null ? [{ y: M.goal, color: '#10b981', label: 'target' }] : []} />
         <div className="dim" style={{ fontSize: 12 }}>Tap another card above to chart it · grey = measurements · blue = 7-day average · dashed = trend projection · coloured bands = phases</div>
       </div>
 
@@ -162,24 +191,6 @@ export default function Measurements({ uid, settings }) {
           <textarea value={paste} onChange={e => setPaste(e.target.value)} />
           <button onClick={importPaste} disabled={!paste.trim()} style={{ marginTop: 6 }}>Import</button> <span className="g">{msg}</span>
         </details>
-      </div>
-
-      <div className="card">
-        <div className="row sp" style={{ marginBottom: 8 }}><h3>Body-part measurements</h3>{lastWhr != null && <span className="mute" style={{ fontSize: 13 }}>Waist–hip ratio <b>{lastWhr.toFixed(2)}</b></span>}</div>
-        {tapeRows.length > 0 && (
-          <table style={{ marginBottom: 10 }}><thead><tr><th></th><th>First</th><th>Latest</th><th>Change</th></tr></thead><tbody>
-            {TAPE.filter(([k]) => tapeLast(k) != null).map(([k, l]) => { const a = tapeFirst(k), b = tapeLast(k), d = b - a; return (
-              <tr key={k}><td>{l}</td><td>{fmt(a, 1)}</td><td>{fmt(b, 1)}</td><td className={Math.abs(d) < 0.05 ? 'dim' : ''}>{Math.abs(d) < 0.05 ? '–' : (d > 0 ? '+' : '') + d.toFixed(1)}</td></tr>); })}
-          </tbody></table>)}
-        <div className="dim" style={{ fontSize: 13, marginBottom: 8 }}>Upload a screenshot of the Renpho body-part screen and the numbers are read for you, or type them in.</div>
-        <input type="file" accept="image/*" onChange={readShot} disabled={reading} />
-        {reading && <div className="mute">Reading…</div>}
-        <div className="f3" style={{ margin: '10px 0' }}>
-          <Field2 label="Date"><input type="date" value={tape.date} onChange={e => setTape({ ...tape, date: e.target.value })} /></Field2>
-          {TAPE.map(([k, l]) => <Field2 key={k} label={l + ' cm'}><input inputMode="decimal" value={tape[k] ?? ''} onChange={e => setTape({ ...tape, [k]: e.target.value })} /></Field2>)}
-        </div>
-        <button className="pri" onClick={saveTape}>Save</button>
-        {tapeMsg && <div className="msg">{tapeMsg}</div>}
       </div>
 
       <div className="card">
