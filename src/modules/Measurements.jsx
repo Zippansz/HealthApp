@@ -6,12 +6,12 @@ import { TAPE } from '../lib/tape';
 import { extractTape } from '../lib/gemini';
 import { todayStr, addDays, daysBetween, num, fmt, rfm, whtr, withMA, slopePerWeek, phaseFor } from '../lib/calc';
 
-function Stat({ label, value, unit, goal, start, cur, lowerIsBetter = true, digits = 1 }) {
+function Stat({ label, value, unit, goal, start, cur, lowerIsBetter = true, digits = 1, active, onClick }) {
   let pct = null;
   if (cur != null && goal != null && start != null && start !== goal) pct = Math.max(0, Math.min(100, ((start - cur) / (start - goal)) * 100));
   return (
-    <div className="card stat" style={{ marginBottom: 0 }}>
-      <div className="lbl">{label}</div>
+    <div className="card stat" onClick={onClick} style={{ marginBottom: 0, cursor: 'pointer', borderColor: active ? 'var(--blue)' : undefined, boxShadow: active ? '0 0 0 1px var(--blue)' : undefined }}>
+      <div className="lbl">{label}{active ? ' · shown' : ''}</div>
       <div className="v">{fmt(value, digits)}<span className="mute" style={{ fontSize: 13 }}> {unit}</span></div>
       <div className="s">Goal {fmt(goal, digits)} {unit}</div>
       {pct != null && <div className="bar" style={{ marginTop: 6 }}><i style={{ width: pct + '%', background: 'var(--green)' }} /></div>}
@@ -40,14 +40,30 @@ export default function Measurements({ uid, settings }) {
   const phase = phaseFor(settings.phases, todayStr());
   const goal = settings.goal;
 
-  // projection: continue the current trend to the end of the active phase (or 60 days if none)
+  // ----- the chart shows whichever metric card was tapped -----
+  const [sel, setSel] = useState('weight');
+  const METRICS = {
+    weight: { label: 'Weight', unit: 'kg', digits: 1, yPad: 0.5, get: r => r.weight, goal: phase?.weight ?? goal.weight, start: settings.start.weight },
+    navel: { label: 'Navel', unit: 'cm', digits: 1, yPad: 1, get: r => r.navel, goal: phase?.navel ?? goal.navel, start: settings.start.navel },
+    waist: { label: 'Waist', unit: 'cm', digits: 1, yPad: 1, get: r => r.waist, goal: phase?.waist ?? goal.waist, start: settings.start.waist },
+    rfm: { label: 'Body fat (RFM)', unit: '%', digits: 1, yPad: 0.5, get: r => rfm(h, r.navel), goal: phase?.bf ?? goal.bf, start: settings.start.bf },
+    whtr: { label: 'Waist-to-height', unit: '', digits: 3, yPad: 0.01, get: r => whtr(h, r.navel), goal: goal.whtr, start: settings.start.whtr },
+    scale: { label: 'Body fat (scale)', unit: '%', digits: 1, yPad: 0.5, get: r => r.bf, goal: phase?.bf ?? goal.bf, start: settings.start.bf },
+  };
+  const M = METRICS[sel] || METRICS.weight;
+  const pts = data.map(r => ({ date: r.date, v: M.get(r) })).filter(r => r.v != null && Number.isFinite(r.v));
+  const maM = withMA(pts, 'v');
+  const lastM = maM.at(-1);
+  const slopeM = slopePerWeek(maM);
   let proj = null, projEnd = null;
-  if (lastMA && slope != null) {
+  if (lastM && slopeM != null) {
     projEnd = phase ? phase.end : addDays(todayStr(), 60);
-    const d = daysBetween(lastMA.date, projEnd);
-    if (d > 0) proj = lastMA.ma + (slope / 7) * d;
+    const d = daysBetween(lastM.date, projEnd);
+    if (d > 0) proj = lastM.ma + (slopeM / 7) * d;
   }
-  const projSeries = proj != null ? [{ x: lastMA.date, y: lastMA.ma }, { x: projEnd, y: proj }] : [];
+  const projSeries = proj != null ? [{ x: lastM.date, y: lastM.ma }, { x: projEnd, y: proj }] : [];
+  const rate = slopeM == null ? null : slopeM;
+  const good = rate != null && (M.goal < M.start ? rate < 0 : rate > 0);
 
   const save = async () => {
     const patch = { date: form.date };
@@ -102,8 +118,7 @@ export default function Measurements({ uid, settings }) {
   }, [data]);
 
   const bands = settings.phases.map(p => ({ start: p.start, end: p.end, color: MODE_COLORS[p.mode] || '#888', label: p.name }));
-  const weightPts = data.filter(r => r.weight != null).map(r => ({ x: r.date, y: r.weight }));
-  const delta = lastMA ? lastMA.ma - settings.start.weight : null;
+  const delta = lastM ? lastM.ma - M.start : null;
 
   return (
     <>
@@ -112,25 +127,25 @@ export default function Measurements({ uid, settings }) {
         <div className="mute" style={{ fontSize: 13 }}>{phase ? <>Phase: <b className="g">{phase.name}</b> · ends {phase.end}</> : 'No active phase'}</div>
       </div>
       <div className="grid" style={{ marginBottom: 12 }}>
-        <Stat label="Weight (7DMA)" value={lastMA?.ma} unit="kg" goal={phase?.weight ?? goal.weight} start={settings.start.weight} cur={lastMA?.ma} />
-        <Stat label="Navel" value={navel} unit="cm" goal={phase?.navel ?? goal.navel} start={settings.start.navel} cur={navel} />
-        <Stat label="Waist" value={waist} unit="cm" goal={phase?.waist ?? goal.waist} start={settings.start.waist} cur={waist} />
-        <Stat label="Body fat (RFM)" value={rfm(h, navel)} unit="%" goal={phase?.bf ?? goal.bf} start={settings.start.bf} cur={rfm(h, navel)} />
-        <Stat label="Waist-to-height" value={whtr(h, navel)} unit="" goal={goal.whtr} start={settings.start.whtr} cur={whtr(h, navel)} digits={3} />
-        {scaleBf != null && <Stat label="Body fat (scale)" value={scaleBf} unit="%" goal={phase?.bf ?? goal.bf} start={settings.start.bf} cur={scaleBf} />}
+        <Stat active={sel === 'weight'} onClick={() => setSel('weight')} label="Weight (7DMA)" value={lastMA?.ma} unit="kg" goal={phase?.weight ?? goal.weight} start={settings.start.weight} cur={lastMA?.ma} />
+        <Stat active={sel === 'navel'} onClick={() => setSel('navel')} label="Navel" value={navel} unit="cm" goal={phase?.navel ?? goal.navel} start={settings.start.navel} cur={navel} />
+        <Stat active={sel === 'waist'} onClick={() => setSel('waist')} label="Waist" value={waist} unit="cm" goal={phase?.waist ?? goal.waist} start={settings.start.waist} cur={waist} />
+        <Stat active={sel === 'rfm'} onClick={() => setSel('rfm')} label="Body fat (RFM)" value={rfm(h, navel)} unit="%" goal={phase?.bf ?? goal.bf} start={settings.start.bf} cur={rfm(h, navel)} />
+        <Stat active={sel === 'whtr'} onClick={() => setSel('whtr')} label="Waist-to-height" value={whtr(h, navel)} unit="" goal={goal.whtr} start={settings.start.whtr} cur={whtr(h, navel)} digits={3} />
+        {scaleBf != null && <Stat active={sel === 'scale'} onClick={() => setSel('scale')} label="Body fat (scale)" value={scaleBf} unit="%" goal={phase?.bf ?? goal.bf} start={settings.start.bf} cur={scaleBf} />}
       </div>
 
       <div className="card">
-        <div className="row sp"><h3>Weight</h3>
+        <div className="row sp"><h3>{M.label}</h3>
           <span className="mute" style={{ fontSize: 13 }}>
-            Trend {slope != null ? <b className={slope < 0 ? 'g' : 'a'}>{slope > 0 ? '+' : ''}{slope.toFixed(2)} kg/wk</b> : '–'}
-            {proj != null && <> · projected <b>{proj.toFixed(1)} kg</b> by {projEnd}</>}
-            {delta != null && <> · {delta > 0 ? '+' : ''}{delta.toFixed(1)} kg since start</>}
+            Trend {rate != null ? <b className={good ? 'g' : 'a'}>{rate > 0 ? '+' : ''}{rate.toFixed(M.digits === 3 ? 3 : 2)} {M.unit}/wk</b> : '–'}
+            {proj != null && <> · projected <b>{proj.toFixed(M.digits)} {M.unit}</b> by {projEnd}</>}
+            {delta != null && <> · {delta > 0 ? '+' : ''}{delta.toFixed(M.digits)} {M.unit} since start</>}
           </span></div>
-        <Chart bands={bands}
-          series={[{ points: weightPts, color: '#475569', dots: true, width: 1 }, { points: ma.map(r => ({ x: r.date, y: r.ma })), color: '#38bdf8', width: 2.5 }, { points: projSeries, color: '#f59e0b', dashed: true }]}
-          hlines={[{ y: phase?.weight ?? goal.weight, color: '#10b981', label: 'target' }]} />
-        <div className="dim" style={{ fontSize: 12 }}>Grey = daily weigh-ins · blue = 7-day average · dashed = trend projection · coloured bands = phases</div>
+        <Chart bands={bands} yPad={M.yPad}
+          series={[{ points: pts.map(r => ({ x: r.date, y: r.v })), color: '#475569', dots: true, width: 1 }, { points: maM.map(r => ({ x: r.date, y: r.ma })), color: '#38bdf8', width: 2.5 }, { points: projSeries, color: '#f59e0b', dashed: true }]}
+          hlines={[{ y: M.goal, color: '#10b981', label: 'target' }]} />
+        <div className="dim" style={{ fontSize: 12 }}>Tap another card above to chart it · grey = measurements · blue = 7-day average · dashed = trend projection · coloured bands = phases</div>
       </div>
 
       <div className="card">
