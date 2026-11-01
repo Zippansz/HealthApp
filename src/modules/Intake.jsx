@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { useCollection, put, remove, saveSettings } from '../lib/db';
-import { todayStr, addDays, num, phaseFor, expenditure } from '../lib/calc';
+import { todayStr, addDays, num, phaseFor, expenditure, daysBetween } from '../lib/calc';
 import { askGemini } from '../lib/gemini';
 import { applyActions, describe } from '../lib/actions';
 import Bars, { MACRO_COLORS } from '../Bars';
@@ -37,7 +37,7 @@ export default function Intake({ uid, settings }) {
   const since = date < addDays(todayStr(), -70) ? date : addDays(todayStr(), -70);
   const meals = useCollection(uid, 'meals', { since });
   const acts = useCollection(uid, 'activity', { since });
-  const imported = useCollection(uid, 'nutrition', { since });
+  const imported = useCollection(uid, 'nutrition'); // small (one doc per day), so load all of it
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
   const [photos, setPhotos] = useState([]);
@@ -76,7 +76,9 @@ export default function Intake({ uid, settings }) {
   const weekly = useMemo(() => {
     const today = todayStr();
     const groups = new Map();
-    for (let i = 69; i >= 1; i--) {
+    const first = imported.length ? imported.reduce((m, x) => (x.id < m ? x.id : m), today) : today;
+    const span = Math.max(69, daysBetween(first, today));
+    for (let i = span; i >= 1; i--) {
       const d = addDays(today, -i);
       const dm = meals.filter(m => m.date === d);
       let day = null;
@@ -84,7 +86,7 @@ export default function Intake({ uid, settings }) {
       else { const im = imported.find(x => x.id === d); if (im) day = { kcal: im.kcal, p: im.p, f: im.f, c: im.c }; }
       if (!day || day.kcal < 800) continue;
       const mode = settings.modes[phaseFor(settings.phases, d)?.mode] || settings.modes.maintenance;
-      const burn = expenditure(settings, acts.find(x => x.id === d) || {});
+      const burn = !dm.length && imported.find(x => x.id === d)?.burn || expenditure(settings, acts.find(x => x.id === d) || {});
       const wd = new Date(d + 'T12:00:00').getDay();
       const wk = addDays(d, -((wd + 6) % 7));
       const g = groups.get(wk) || { wk, n: 0, kcal: 0, p: 0, f: 0, c: 0, burn: 0, inRange: 0, protOk: 0 };
@@ -93,8 +95,9 @@ export default function Intake({ uid, settings }) {
       if (day.p >= mode.p) g.protOk++;
       groups.set(wk, g);
     }
-    return [...groups.values()].sort((a, b) => b.wk.localeCompare(a.wk)).slice(0, 8);
+    return [...groups.values()].sort((a, b) => b.wk.localeCompare(a.wk));
   }, [meals, imported, acts, settings]);
+  const [allWeeks, setAllWeeks] = useState(false);
 
   const frequent = useMemo(() => {
     const m = new Map();
@@ -233,12 +236,13 @@ export default function Intake({ uid, settings }) {
         {weekly.length === 0 ? <div className="dim">No complete days yet.</div> : (
           <div style={{ overflowX: 'auto' }}>
             <table style={{ minWidth: 420 }}><thead><tr><th>Week of</th><th>Days</th><th>kcal</th><th>Protein</th><th>In range</th><th>Protein ✓</th><th>vs burn</th></tr></thead><tbody>
-              {weekly.map(g => { const bal = (g.kcal - g.burn) / g.n; return (
+              {(allWeeks ? weekly : weekly.slice(0, 8)).map(g => { const bal = (g.kcal - g.burn) / g.n; return (
                 <tr key={g.wk}><td>{g.wk.slice(5)}</td><td>{g.n}</td><td><b>{Math.round(g.kcal / g.n)}</b></td><td>{Math.round(g.p / g.n)} g</td>
                   <td>{g.inRange}/{g.n}</td><td>{g.protOk}/{g.n}</td>
                   <td className={bal > 0 ? 'a' : 'g'}>{bal > 0 ? '+' : ''}{Math.round(bal)}</td></tr>); })}
             </tbody></table>
           </div>)}
+        {weekly.length > 8 && <button className="sm" style={{ marginTop: 8 }} onClick={() => setAllWeeks(!allWeeks)}>{allWeeks ? 'Show last 8 weeks' : `Show all ${weekly.length} weeks`}</button>}
         <div className="dim" style={{ fontSize: 12, marginTop: 6 }}>Averages per logged day (Mon–Sun weeks). In range = kcal inside that day's phase target; Protein ✓ = protein target reached; vs burn = average intake minus estimated expenditure per day. Today and days under 800 kcal (unfinished logging) are left out.</div>
       </div>
     </>

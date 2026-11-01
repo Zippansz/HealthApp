@@ -41,6 +41,17 @@ export async function importHealthCSV(uid, text, { since } = {}) {
     await putMany(uid, 'nutrition', Object.values(byDay).map(x => ({ id: x.date, data: x })));
     return { kind: 'nutrition days', count: Object.keys(byDay).length };
   }
+  if (head.includes('Intake(kcal)')) {         // own spreadsheet: Date, Protein(g), Fat(g), Carbs(g), Intake(kcal), Expenditure(kcal) – daily totals
+    rows.forEach(r => {
+      const date = r.Date; const kcal = num(r['Intake(kcal)']);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date || '') || !kcal || (since && date < since)) return;
+      const o = { date, kcal, p: num(r['Protein(g)']) || 0, f: num(r['Fat(g)']) || 0, c: num(r['Carbs(g)']) || 0 };
+      const burn = num(r['Expenditure(kcal)']); if (burn) o.burn = burn;   // the spreadsheet's own daily expenditure estimate
+      byDay[date] = o;
+    });
+    await putMany(uid, 'nutrition', Object.values(byDay).map(x => ({ id: x.date, data: x })));
+    return { kind: 'intake days (with expenditure estimates)', count: Object.keys(byDay).length };
+  }
   if (head.includes('Weight(kg)')) {           // own spreadsheet: Date, Weight(kg), Navel(cm), Waist(cm) with comma decimals and "Null"
     rows.forEach(r => {
       const date = r.Date;
