@@ -21,7 +21,10 @@ export const muscleOf = name => (RULES.find(([re]) => re.test(name)) || [null, '
 export const MUSCLE_ORDER = ['Chest', 'Back', 'Shoulders', 'Biceps', 'Triceps', 'Forearms', 'Quads', 'Hamstrings & glutes', 'Calves', 'Core', 'Neck', 'Other'];
 
 const WEEKS = 12;
-export function muscleStats(workouts) {
+// Share of body weight that counts as load for bodyweight moves (approximate).
+const bwShare = name => (/pull ?up|chin up/i.test(name) ? 1 : /push ?up/i.test(name) ? 0.65 : /\bdip\b/i.test(name) ? 0.5 : 0);
+
+export function muscleStats(workouts, bwAt = () => null) {
   const today = todayStr();
   const groups = {};
   for (const w of workouts) {
@@ -32,7 +35,9 @@ export function muscleStats(workouts) {
       if (!sets.length) continue;
       const m = muscleOf(e.name);
       const g = (groups[m] ||= { name: m, weeks: Array(WEEKS).fill(0), last: null, ex: {} });
-      g.weeks[Math.floor(age / 7)] += sets.length;
+      const bw = (bwAt(w.date) || 0) * bwShare(e.name);
+      const vol = sets.reduce((a, x) => a + ((x.kg || 0) + bw) * x.reps, 0);   // kg x reps (+ share of body weight for pull-ups etc.)
+      g.weeks[Math.floor(age / 7)] += vol;
       if (!g.last || w.date > g.last) g.last = w.date;
       const weighted = sets.some(s => s.kg > 0);
       const metric = weighted ? Math.max(...sets.map(s => e1rm(s.kg, s.reps))) : Math.max(...sets.map(s => s.reps));
@@ -44,10 +49,10 @@ export function muscleStats(workouts) {
     const exs = Object.values(g.ex).map(x => ({ ...x, delta: x.recent && x.prior ? x.recent / x.prior - 1 : null }));
     const ds = exs.filter(x => x.delta != null).map(x => x.delta);
     const delta = ds.length ? ds.reduce((a, b) => a + b, 0) / ds.length : null;
-    const recentSets = g.weeks.slice(0, 4).reduce((a, b) => a + b, 0) / 4;
-    const priorSets = g.weeks.slice(4, 8).reduce((a, b) => a + b, 0) / 4;
+    const recentVol = g.weeks.slice(0, 4).reduce((a, b) => a + b, 0) / 4;
+    const priorVol = g.weeks.slice(4, 8).reduce((a, b) => a + b, 0) / 4;
     return {
-      name: g.name, weeks: g.weeks, last: g.last, daysAgo: daysBetween(g.last, today), recentSets, priorSets, delta, nDelta: ds.length,
+      name: g.name, weeks: g.weeks, last: g.last, daysAgo: daysBetween(g.last, today), recentVol, priorVol, delta, nDelta: ds.length,
       status: delta == null ? 'new' : delta > 0.02 ? 'up' : delta < -0.02 ? 'down' : 'flat',
       exercises: exs.sort((a, b) => (b.delta ?? -9) - (a.delta ?? -9)),
     };

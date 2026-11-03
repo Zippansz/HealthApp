@@ -121,7 +121,7 @@ export default function Training({ uid, settings }) {
           </tbody></table></details>
       </div>
 
-      <MuscleDash workouts={norm} />
+      <MuscleDash workouts={norm} bwAt={bwAt} />
 
       <div className="card">
         <h3 style={{ marginBottom: 8 }}>Paste a workout</h3>

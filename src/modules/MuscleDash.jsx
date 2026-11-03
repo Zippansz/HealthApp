@@ -15,27 +15,28 @@ function Spark({ weeks, color }) {
   );
 }
 
-export default function MuscleDash({ workouts }) {
-  const stats = useMemo(() => muscleStats(workouts), [workouts]);
+export default function MuscleDash({ workouts, bwAt }) {
+  const stats = useMemo(() => muscleStats(workouts, bwAt), [workouts, bwAt]);
+  const kg = v => (v >= 1000 ? (v / 1000).toFixed(1) + ' t' : Math.round(v) + ' kg');
   if (!stats.length) return null;
   const pct = d => (d == null ? '–' : (d > 0 ? '+' : '') + (d * 100).toFixed(0) + '%');
   return (
     <div className="card">
       <h3 style={{ marginBottom: 4 }}>Muscle dashboard</h3>
       <div className="dim" style={{ fontSize: 12, marginBottom: 10 }}>
-        Strength = best estimated 1RM (or reps for bodyweight moves) in the last 6 weeks vs the 6 weeks before. Sets = hard sets per week, last 4 weeks. Bars show the last 12 weeks, the newest 4 in full colour.
+        Strength = best estimated 1RM (or reps for bodyweight moves) in the last 6 weeks vs the 6 weeks before. Volume = weight × reps per week (kg lifted, averaged over the last 4 weeks). Pull-ups, chin-ups, push-ups and dips count a share of your body weight. Bars show the last 12 weeks, the newest 4 in full colour.
       </div>
       <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit,minmax(200px,1fr))' }}>
         {stats.map(m => {
           const [label, color] = STATUS[m.status];
-          const trend = m.recentSets - m.priorSets;
+          const trend = m.priorVol ? (m.recentVol - m.priorVol) / m.priorVol : 0;
           return (
             <details key={m.name} className="card" style={{ marginBottom: 0, padding: 12 }}>
               <summary style={{ listStyle: 'none', color: 'var(--text)' }}>
                 <div className="row sp"><b>{m.name}</b><span style={{ color, fontSize: 12, fontWeight: 600 }}>{label}</span></div>
                 <div className="row sp" style={{ margin: '6px 0 2px' }}>
                   <span style={{ fontSize: 24, fontWeight: 700, color }}>{pct(m.delta)}</span>
-                  <span className="mute" style={{ fontSize: 12, textAlign: 'right' }}>{m.recentSets.toFixed(1)} sets/wk<br />{trend > 0.4 ? '▲' : trend < -0.4 ? '▼' : '►'} vs {m.priorSets.toFixed(1)} before</span>
+                  <span className="mute" style={{ fontSize: 12, textAlign: 'right' }}>{kg(m.recentVol)}/wk<br />{trend > 0.1 ? '▲' : trend < -0.1 ? '▼' : '►'} vs {kg(m.priorVol)} before</span>
                 </div>
                 <Spark weeks={m.weeks} color={color} />
                 <div className="dim" style={{ fontSize: 12, marginTop: 4 }}>Last trained {m.daysAgo === 0 ? 'today' : m.daysAgo + ' days ago'}{m.nDelta ? ` · based on ${m.nDelta} exercise${m.nDelta > 1 ? 's' : ''}` : ''}</div>
