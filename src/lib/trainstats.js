@@ -175,8 +175,8 @@ export function suggestGoals(hist, today, existing) {
     .map(x => {
       const t = topSet(x.sessions.flatMap(s => s.sets));
       const kg = t.kg || 0;
-      // 30 reps is the ceiling: once reached, the next goal is a heavier weight
-      if (t.reps >= MAX_REPS) return kg > 0 ? { name: x.name, kg: kg + 2.5, reps: MAX_REPS, now: t } : null;
+      // 30 reps is the ceiling: once reached, the next goal is a heavier weight, starting at 25 reps
+      if (t.reps >= MAX_REPS) return kg > 0 ? { name: x.name, kg: kg + 2.5, reps: 25, now: t } : null;
       return { name: x.name, kg, reps: Math.min(MAX_REPS, Math.max(t.reps + 2, Math.ceil(t.reps * 1.25))), now: t };
     }).filter(Boolean);
 }
