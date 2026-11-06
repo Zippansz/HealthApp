@@ -14,7 +14,7 @@ const Bar = ({ v, color = 'var(--green)' }) => (
 );
 
 function Week({ workouts, bwAt, today, priority }) {
-  const w = useMemo(() => T.weekSummary(workouts, today, bwAt), [workouts, today]);
+  const w = useMemo(() => T.weekSummary(workouts, today, bwAt), [workouts, today, bwAt(today)]);
   const neg = useMemo(() => T.neglected(workouts, today), [workouts, today]);
   const last = useMemo(() => T.lastTrained(workouts), [workouts]);
   const names = priorityOrder(priority).filter(m => m !== 'Other' && (w.prev[m] || w.now[m] || last[m]));
