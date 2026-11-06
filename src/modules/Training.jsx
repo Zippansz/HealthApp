@@ -107,6 +107,14 @@ export default function Training({ uid, settings }) {
       <div className="row sp" style={{ marginBottom: 12 }}><h2>Training</h2><span className="mute" style={{ fontSize: 13 }}>{norm.length} workouts · {thisYear} in last 30 days</span></div>
 
       <div className="card">
+        <h3 style={{ marginBottom: 8 }}>Paste a workout</h3>
+        <div className="dim" style={{ fontSize: 13, marginBottom: 8 }}>In Hevy: open the workout → Share → Copy, then paste here. Saving the same workout twice is safe.</div>
+        <textarea value={paste} onChange={e => setPaste(e.target.value)} placeholder={'Hemma - Full Body\nSunday, Nov 01, 2026 at 2:29pm\n\nRdl To Row (Barbell)\nSet 1: 35 kg x 28'} style={{ minHeight: 110 }} />
+        <button onClick={onPaste} disabled={!paste.trim()} style={{ marginTop: 8 }}>Save workout</button>
+        {pmsg && <div className="msg">{pmsg}</div>}
+      </div>
+
+      <div className="card">
         <h3 style={{ marginBottom: 8 }}>Import from Hevy</h3>
         <div className="dim" style={{ fontSize: 13, marginBottom: 8 }}>Choose one or more exported CSV files. Re-importing is safe: the same workout is never added twice.</div>
         <input type="file" multiple onChange={onFiles} disabled={busy} />
@@ -129,14 +137,6 @@ export default function Training({ uid, settings }) {
       </div>
 
       <MuscleDash workouts={norm} bwAt={bwAt} />
-
-      <div className="card">
-        <h3 style={{ marginBottom: 8 }}>Paste a workout</h3>
-        <div className="dim" style={{ fontSize: 13, marginBottom: 8 }}>In Hevy: open the workout → Share → Copy, then paste here. Saving the same workout twice is safe.</div>
-        <textarea value={paste} onChange={e => setPaste(e.target.value)} placeholder={'Hemma - Full Body\nSunday, Nov 01, 2026 at 2:29pm\n\nRdl To Row (Barbell)\nSet 1: 35 kg x 28'} style={{ minHeight: 110 }} />
-        <button onClick={onPaste} disabled={!paste.trim()} style={{ marginTop: 8 }}>Save workout</button>
-        {pmsg && <div className="msg">{pmsg}</div>}
-      </div>
 
       <div className="card">
         <div className="row sp" style={{ marginBottom: 8 }}><h3>Exercises</h3><input placeholder="Search" value={q} onChange={e => setQ(e.target.value)} style={{ width: 160 }} /></div>
