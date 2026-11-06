@@ -1,6 +1,7 @@
 import { addDays, daysBetween } from './calc';
 import { muscleOf, bwShare, MUSCLE_ORDER } from './muscles';
 
+export const MAX_REPS = 30;
 const hardSets = e => e.sets.filter(s => s.type !== 'warmup' && s.reps > 0);
 const setScore = s => ((s.kg || 0) > 0 ? s.kg * s.reps : s.reps); // best-set measure: kg x reps, or reps for bodyweight
 export const topSet = sets => sets.reduce((m, s) => (setScore(s) > setScore(m) ? s : m), sets[0]);
@@ -127,9 +128,9 @@ export function practice(workouts, today) {
   for (const [name, sessions] of history(workouts)) {
     if (!bwShare(name) || daysBetween(sessions.at(-1).date, today) > 120) continue;
     const per = {};
-    sessions.forEach(s => { per[s.date] = (per[s.date] || 0) + s.sets.reduce((a, x) => a + x.reps, 0); });
+    sessions.forEach(s => { per[s.date] = Math.max(per[s.date] || 0, ...s.sets.map(x => x.reps)); });
     const start = mondayOf(today), prevStart = addDays(start, -7);
-    const sum = (a, b) => Object.entries(per).filter(([d]) => d >= a && d <= b).reduce((t, [, v]) => t + v, 0);
+    const sum = (a, b) => Math.max(0, ...Object.entries(per).filter(([d]) => d >= a && d <= b).map(([, v]) => v));
     let streak = 0, d = per[today] ? today : addDays(today, -1);
     while (per[d]) { streak++; d = addDays(d, -1); }
     res.push({
@@ -174,8 +175,10 @@ export function suggestGoals(hist, today, existing) {
     .map(x => {
       const t = topSet(x.sessions.flatMap(s => s.sets));
       const kg = t.kg || 0;
-      return { name: x.name, kg, reps: Math.max(t.reps + 2, Math.ceil(t.reps * 1.25)), now: t };
-    });
+      // 30 reps is the ceiling: once reached, the next goal is a heavier weight
+      if (t.reps >= MAX_REPS) return kg > 0 ? { name: x.name, kg: kg + 2.5, reps: MAX_REPS, now: t } : null;
+      return { name: x.name, kg, reps: Math.min(MAX_REPS, Math.max(t.reps + 2, Math.ceil(t.reps * 1.25))), now: t };
+    }).filter(Boolean);
 }
 
 // Workout detail: every exercise next to the previous time you did it.

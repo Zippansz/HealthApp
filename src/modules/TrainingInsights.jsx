@@ -66,6 +66,7 @@ function Goals({ uid, settings, workouts, today }) {
   const save = g => saveSettings(uid, { goals: g });
   const add = () => {
     const n = hist.has(name) ? name : null; if (!n || !(+reps > 0)) return;
+    if (+reps > T.MAX_REPS) { setReps(String(T.MAX_REPS)); return; }
     save([...goals, { name: n, kg: +kg || 0, reps: +reps }]); setName(''); setKg(''); setReps(''); setOpen(false);
   };
   const names = [...hist.keys()].sort();
@@ -78,7 +79,7 @@ function Goals({ uid, settings, workouts, today }) {
         <datalist id="exnames">{names.map(n => <option key={n} value={n} />)}</datalist>
         <div className="f3" style={{ margin: '6px 0' }}>
           <input inputMode="decimal" placeholder="kg (0 = bodyweight)" value={kg} onChange={e => setKg(e.target.value)} />
-          <input inputMode="numeric" placeholder="Reps" value={reps} onChange={e => setReps(e.target.value)} />
+          <input inputMode="numeric" placeholder="Reps (max 30)" value={reps} onChange={e => setReps(e.target.value)} />
           <button className="pri" onClick={add}>Save</button>
         </div>
       </div>}
@@ -117,11 +118,11 @@ function Practice({ workouts, today }) {
       {list.map(p => {
         const max = Math.max(...p.daily, 1);
         return <div key={p.name} style={{ padding: '6px 0' }}>
-          <div className="row sp"><b style={{ fontSize: 14 }}>{p.name}</b><span className="mute" style={{ fontSize: 13 }}>{p.thisWeek} reps this week <span className="dim">/ {p.lastWeek} last</span></span></div>
+          <div className="row sp"><b style={{ fontSize: 14 }}>{p.name}</b><span className="mute" style={{ fontSize: 13 }}>best set {p.thisWeek} this week <span className="dim">/ {p.lastWeek} last</span></span></div>
           <svg viewBox="0 0 140 28" width="100%" height="28" style={{ display: 'block', margin: '4px 0' }}>
             {p.daily.map((v, i) => <rect key={i} x={i * 10 + 1} y={28 - (v / max) * 26} width="8" height={Math.max(v ? (v / max) * 26 : 1, 1)} rx="1.5" fill={v ? 'var(--green)' : '#1e293b'} />)}
           </svg>
-          <div className="dim" style={{ fontSize: 12 }}>{p.streak ? `${p.streak}-day streak · ` : ''}best day {p.best} reps · last 14 days</div>
+          <div className="dim" style={{ fontSize: 12 }}>{p.streak ? `${p.streak}-day streak · ` : ''}best set ever {p.best} reps · bars = best set per day, last 14 days</div>
         </div>;
       })}
     </div>
