@@ -36,7 +36,7 @@ export default function MuscleDash({ workouts, bwAt }) {
     <div className="card">
       <h3 style={{ marginBottom: 4 }}>Muscle dashboard</h3>
       <div className="dim" style={{ fontSize: 12, marginBottom: 10 }}>
-        Strength = best estimated 1RM (or reps for bodyweight moves) in the last 6 weeks vs the 6 weeks before. Volume = weight × reps per week (kg lifted, averaged over the last 4 weeks). Pull-ups, chin-ups, push-ups and dips count a share of your body weight. Bars show the last 12 weeks, the newest 4 in full colour.
+        Strength = best estimated 1RM (or reps for bodyweight moves) in the last 6 weeks vs the 6 weeks before. Volume = weight × reps per week (kg lifted, averaged over the last 4 weeks). Pull-ups, chin-ups, push-ups, dips and hanging leg raises count a share of your body weight. Bars show the last 12 weeks, the newest 4 in full colour.
       </div>
       <Balance stats={stats} />
       <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit,minmax(200px,1fr))' }}>
