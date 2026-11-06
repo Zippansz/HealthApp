@@ -26,7 +26,7 @@ export const MUSCLE_ORDER = ['Chest', 'Back', 'Shoulders', 'Biceps', 'Triceps', 
 
 const WEEKS = 12;
 // Share of body weight that counts as load for bodyweight moves (approximate).
-export const bwShare = name => (/pull ?up|chin up/i.test(name) ? 1 : /push ?up/i.test(name) ? 0.65 : /\bdip\b/i.test(name) ? 0.5 : /(leg|knee) raise/i.test(name) && !/lying/i.test(name) ? 0.3 : /sit.?up|crunch/i.test(name) ? 0.25 : 0);
+export const bwShare = name => (/pull ?up|chin up/i.test(name) ? 1 : /push ?up/i.test(name) ? 0.65 : /\bdip\b/i.test(name) ? 0.5 : /(leg|knee) raise/i.test(name) && !/lying/i.test(name) ? 0.4 : /sit.?up|crunch/i.test(name) ? 0.25 : 0);
 
 export function muscleStats(workouts, bwAt = () => null) {
   const today = todayStr();
