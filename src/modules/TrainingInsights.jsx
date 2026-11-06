@@ -206,7 +206,6 @@ export default function TrainingInsights({ uid, settings, workouts, bwAt, meals,
       <Goals uid={uid} settings={settings} workouts={workouts} today={today} />
       <Heat workouts={workouts} today={today} />
       <Records workouts={workouts} today={today} onPick={onPick} />
-      <Practice workouts={workouts} today={today} />
       <IntakeSplit workouts={workouts} meals={meals} nutrition={nutrition} today={today} />
     </>
   );
