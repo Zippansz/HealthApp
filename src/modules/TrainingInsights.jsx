@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { saveSettings } from '../lib/db';
 import { todayStr, addDays, daysBetween } from '../lib/calc';
 import * as T from '../lib/trainstats';
+import { priorityOrder } from '../lib/muscles';
 
 const kgFmt = v => (v >= 1000 ? (v / 1000).toFixed(1) + ' t' : Math.round(v) + ' kg');
 const pct = d => (d == null ? '–' : (d > 0 ? '+' : '') + (d * 100).toFixed(0) + '%');
@@ -12,11 +13,11 @@ const Bar = ({ v, color = 'var(--green)' }) => (
   </div>
 );
 
-function Week({ workouts, bwAt, today }) {
+function Week({ workouts, bwAt, today, priority }) {
   const w = useMemo(() => T.weekSummary(workouts, today, bwAt), [workouts, today]);
   const neg = useMemo(() => T.neglected(workouts, today), [workouts, today]);
   const last = useMemo(() => T.lastTrained(workouts), [workouts]);
-  const names = T.MUSCLE_ORDER.filter(m => m !== 'Other' && (w.prev[m] || w.now[m] || last[m]));
+  const names = priorityOrder(priority).filter(m => m !== 'Other' && (w.prev[m] || w.now[m] || last[m]));
   const wk = daysBetween(w.start, today) + 1;
   return (
     <div className="card">
@@ -25,6 +26,7 @@ function Week({ workouts, bwAt, today }) {
         <div className="card stat" style={{ marginBottom: 0 }}><div className="lbl">Sessions</div><div className="v">{w.days}</div><div className="s">last week {w.prevDays}</div></div>
         <div className="card stat" style={{ marginBottom: 0 }}><div className="lbl">Hard sets</div><div className="v">{w.sets}</div><div className="s">last week {w.prevSets}</div></div>
       </div>
+      <div className="dim" style={{ fontSize: 12 }}>Sorted by your priority (change in Settings).</div>
       {names.map(m => {
         const n = w.now[m] || 0, p = w.prev[m] || 0, d = last[m] ? daysBetween(last[m], today) : null;
         return <div key={m} style={{ margin: '6px 0' }}>
@@ -209,7 +211,7 @@ export default function TrainingInsights({ uid, settings, workouts, bwAt, meals,
   if (!workouts.length) return null;
   return (
     <>
-      <Week workouts={workouts} bwAt={bwAt} today={today} />
+      <Week workouts={workouts} bwAt={bwAt} today={today} priority={settings.musclePriority} />
       <Goals uid={uid} settings={settings} workouts={workouts} today={today} />
       <Heat workouts={workouts} today={today} />
       <Records workouts={workouts} today={today} onPick={onPick} />

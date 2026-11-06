@@ -18,6 +18,10 @@ const RULES = [
   [/bench press|chest|fly|push up|crossover|pec/i, 'Chest'],
 ];
 export const muscleOf = name => (RULES.find(([re]) => re.test(name)) || [null, 'Other'])[1];
+export const priorityOrder = saved => {
+  const keep = (saved || []).filter(m => MUSCLE_ORDER.includes(m));
+  return [...keep, ...MUSCLE_ORDER.filter(m => !keep.includes(m))];
+};
 export const MUSCLE_ORDER = ['Chest', 'Back', 'Shoulders', 'Biceps', 'Triceps', 'Forearms', 'Quads', 'Hamstrings & glutes', 'Calves', 'Core', 'Neck', 'Other'];
 
 const WEEKS = 12;
