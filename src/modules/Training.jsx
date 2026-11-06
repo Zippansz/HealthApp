@@ -4,6 +4,7 @@ import { useCollection, putMany, put } from '../lib/db';
 import { parseHevy, parseHevyText, mergeByDate } from '../lib/hevy';
 import { e1rm, fmt, withMA, todayStr, addDays, num, expenditure } from '../lib/calc';
 import MuscleDash from './MuscleDash';
+import TrainingInsights, { WorkoutDetail } from './TrainingInsights';
 
 // Per-exercise stats from all workouts.
 export function exerciseStats(workouts, bwAt) {
@@ -29,10 +30,15 @@ export function exerciseStats(workouts, bwAt) {
   });
 }
 
+const noteFor = (ws, name) => ws.flatMap(w => w.exercises.filter(e => e.name === name && e.notes).map(e => ({ date: w.date, text: e.notes }))).sort((a, b) => b.date.localeCompare(a.date)).slice(0, 5);
+
 export default function Training({ uid, settings }) {
   const workouts = useCollection(uid, 'workouts');
   const meas = useCollection(uid, 'measurements');
   const [sel, setSel] = useState(null);
+  const [selW, setSelW] = useState(null);
+  const meals = useCollection(uid, 'meals', { since: addDays(todayStr(), -90) });
+  const nutrition = useCollection(uid, 'nutrition');
   const acts = useCollection(uid, 'activity', { since: addDays(todayStr(), -30) });
   const [aDate, setADate] = useState(todayStr());
   const aCur = acts.find(a => a.id === aDate) || {};
@@ -84,6 +90,9 @@ export default function Training({ uid, settings }) {
   const recent = [...norm].sort((a, b) => b.start.localeCompare(a.start)).slice(0, 15);
   const thisYear = norm.filter(w => w.date >= new Date(Date.now() - 30 * 864e5).toISOString().slice(0, 10)).length;
 
+  const curW = selW && norm.find(w => w.id === selW);
+  if (!cur && curW) return <WorkoutDetail workout={curW} workouts={norm} onBack={() => setSelW(null)} onPick={n => { setSelW(null); setSel(n); }} />;
+
   if (cur) return (
     <>
       <button className="sm" onClick={() => setSel(null)} style={{ marginBottom: 10 }}>‹ Back</button>
@@ -95,6 +104,7 @@ export default function Training({ uid, settings }) {
       </div>
       <div className="card"><h3 style={{ marginBottom: 6 }}>{cur.weighted ? 'Estimated 1RM per session (Epley)' : 'Best reps per session'}</h3>
         <Chart yPad={cur.weighted ? 2 : 1} series={[{ color: '#10b981', dots: true, points: cur.sessions.map(s => ({ x: s.date, y: cur.weighted ? s.best1rm : s.maxReps })).filter(p => p.y > 0) }]} /></div>
+      {(() => { const ns = noteFor(norm, cur.name); return ns.length ? <div className="card"><h3 style={{ marginBottom: 6 }}>Notes</h3>{ns.map((n, i) => <div key={i} style={{ fontSize: 13, padding: '3px 0' }}><span className="dim">{n.date}</span> {n.text}</div>)}</div> : null; })()}
       <div className="card"><h3 style={{ marginBottom: 6 }}>Sessions</h3>
         <table><thead><tr><th>Date</th><th>Top set</th><th>1RM</th><th>Sets</th></tr></thead><tbody>
           {[...cur.sessions].reverse().slice(0, 40).map((s, i) => <tr key={i}><td>{s.date}</td><td>{s.topSet ? `${s.topSet.kg} × ${s.topSet.reps}` : `${s.maxReps} reps`}</td><td>{s.best1rm ? s.best1rm.toFixed(1) : '–'}</td><td>{s.sets}</td></tr>)}
@@ -136,6 +146,8 @@ export default function Training({ uid, settings }) {
           </tbody></table></details>
       </div>
 
+      <TrainingInsights uid={uid} settings={settings} workouts={norm} bwAt={bwAt} meals={meals} nutrition={nutrition} onPick={setSel} />
+
       <MuscleDash workouts={norm} bwAt={bwAt} />
 
       <div className="card">
@@ -153,7 +165,7 @@ export default function Training({ uid, settings }) {
           const sets = w.exercises.reduce((a, e) => a + e.sets.filter(s => s.type !== 'warmup').length, 0);
           const vol = w.exercises.reduce((a, e) => a + e.sets.reduce((b, s) => b + (s.kg || 0) * (s.reps || 0), 0), 0);
           const mins = w.mins || null;
-          return <div key={w.id} style={{ padding: '6px 0', borderBottom: '1px solid #1e293b' }}>
+          return <div key={w.id} onClick={() => setSelW(w.id)} style={{ padding: '6px 0', borderBottom: '1px solid #1e293b', cursor: 'pointer' }}>
             <div className="row sp"><b>{w.title}</b><span className="dim">{w.date}</span></div>
             <div className="mute" style={{ fontSize: 13 }}>{w.exercises.length} exercises · {sets} sets · {Math.round(vol)} kg volume{mins ? ` · ${mins} min` : ''}</div></div>;
         })}

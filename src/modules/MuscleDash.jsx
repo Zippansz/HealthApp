@@ -15,6 +15,18 @@ function Spark({ weeks, color }) {
   );
 }
 
+function Balance({ stats }) {
+  const v = n => stats.find(m => m.name === n)?.recentVol || 0;
+  const push = v('Chest') + v('Shoulders') + v('Triceps'), pull = v('Back') + v('Biceps') + v('Forearms');
+  const lower = v('Quads') + v('Hamstrings & glutes') + v('Calves'), upper = push + pull;
+  const Row = ({ a, b, an, bn }) => { const t = a + b || 1; return <div style={{ margin: '6px 0' }}>
+    <div className="row sp" style={{ fontSize: 13 }}><span>{an} {Math.round(a / t * 100)}%</span><span>{Math.round(b / t * 100)}% {bn}</span></div>
+    <div style={{ display: 'flex', height: 8, borderRadius: 4, overflow: 'hidden', background: '#1e293b' }}><div style={{ width: a / t * 100 + '%', background: 'var(--blue)' }} /><div style={{ width: b / t * 100 + '%', background: 'var(--green)' }} /></div></div>; };
+  if (!upper && !lower) return null;
+  return <div style={{ marginBottom: 12 }}><b style={{ fontSize: 13 }}>Balance (weekly volume, last 4 weeks)</b>
+    <Row a={push} b={pull} an="Push" bn="Pull" /><Row a={upper} b={lower} an="Upper" bn="Lower" /></div>;
+}
+
 export default function MuscleDash({ workouts, bwAt }) {
   const stats = useMemo(() => muscleStats(workouts, bwAt), [workouts, bwAt]);
   const kg = v => (v >= 1000 ? (v / 1000).toFixed(1) + ' t' : Math.round(v) + ' kg');
@@ -26,6 +38,7 @@ export default function MuscleDash({ workouts, bwAt }) {
       <div className="dim" style={{ fontSize: 12, marginBottom: 10 }}>
         Strength = best estimated 1RM (or reps for bodyweight moves) in the last 6 weeks vs the 6 weeks before. Volume = weight × reps per week (kg lifted, averaged over the last 4 weeks). Pull-ups, chin-ups, push-ups and dips count a share of your body weight. Bars show the last 12 weeks, the newest 4 in full colour.
       </div>
+      <Balance stats={stats} />
       <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit,minmax(200px,1fr))' }}>
         {stats.map(m => {
           const [label, color] = STATUS[m.status];

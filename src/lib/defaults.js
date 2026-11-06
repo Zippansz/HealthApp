@@ -1,5 +1,6 @@
 // Everything here is only a starting point. All of it can be edited in Settings.
 export const DEFAULTS = {
+  goals: [],
   heightCm: 177,
   start: { weight: 81.8, navel: 98, waist: 94, bf: 27.9, whtr: 0.554 },
   goal: { weight: 75, navel: 85, waist: 84, bf: 17.5, whtr: 0.488 },
