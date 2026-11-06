@@ -162,7 +162,8 @@ export function goalProgress(goal, hist, today) {
     const slope = den ? xs.reduce((p, x, i) => p + (x - mx) * (ys[i] - my), 0) / den : 0;
     if (slope > 0) { const level = Math.max(my + slope * (xs.at(-1) - mx), bestRow.v); etaWeeks = Math.ceil((target - level) / slope / 7); }
   }
-  return { target, best: bestRow.v, pct: Math.min(1, bestRow.v / target), bestSet: bestRow.top, bestDate: bestRow.date, atWeight, delta, etaWeeks, done: bestRow.v >= target };
+  const done = goal.kg > 0 ? atWeight >= goal.reps : bestRow.top.reps >= goal.reps;
+  return { target, best: bestRow.v, pct: done ? 1 : Math.min(0.99, bestRow.v / target), bestSet: bestRow.top, bestDate: bestRow.date, atWeight, delta, etaWeeks, done };
 }
 
 // Goals worth suggesting: the exercises you do most, aiming about 25% above your best set.
@@ -179,6 +180,31 @@ export function suggestGoals(hist, today, existing) {
       if (t.reps >= MAX_REPS) return kg > 0 ? { name: x.name, kg: kg + 2.5, reps: 25, now: t } : null;
       return { name: x.name, kg, reps: Math.min(MAX_REPS, Math.max(t.reps + 2, Math.ceil(t.reps * 1.25))), now: t };
     }).filter(Boolean);
+}
+
+// The goal that follows a reached one: more reps at the same weight, then +2.5 kg starting at 25 reps.
+export function nextGoal(g) {
+  if (g.reps >= MAX_REPS) return g.kg > 0 ? { ...g, kg: g.kg + 2.5, reps: 25 } : g;
+  return { ...g, reps: Math.min(MAX_REPS, g.reps + Math.max(2, Math.ceil(g.reps * 0.1))) };
+}
+
+// Keeps the 5 most-done exercises in the goal list and rolls reached goals forward.
+export function syncGoals(goals, off, hist, today) {
+  let out = goals.map(g => {
+    let cur = g;
+    for (let i = 0; i < 6 && goalProgress(cur, hist, today).done; i++) { const n = nextGoal(cur); if (n === cur) break; cur = n; }
+    return cur;
+  });
+  const have = new Set(out.map(g => g.name));
+  const top = [...hist.entries()]
+    .map(([name, sessions]) => ({ name, n: sessions.filter(s => daysBetween(s.date, today) < 120).length, sessions }))
+    .filter(x => x.n >= 4).sort((a, b) => b.n - a.n).slice(0, 5);
+  for (const x of top) {
+    if (have.has(x.name) || (off || []).includes(x.name)) continue;
+    const sg = suggestGoals(new Map([[x.name, x.sessions]]), today, [])[0];
+    if (sg) { out.push({ name: sg.name, kg: sg.kg, reps: sg.reps, auto: true }); have.add(x.name); }
+  }
+  return out;
 }
 
 // Workout detail: every exercise next to the previous time you did it.

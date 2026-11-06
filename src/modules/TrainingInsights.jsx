@@ -64,16 +64,23 @@ function Goals({ uid, settings, workouts, today }) {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState(''), [kg, setKg] = useState(''), [reps, setReps] = useState('');
   const save = g => saveSettings(uid, { goals: g });
+  const off = settings.goalsOff || [];
+  React.useEffect(() => {
+    if (!hist.size) return;
+    const next = T.syncGoals(goals, off, hist, today);
+    if (JSON.stringify(next) !== JSON.stringify(goals)) save(next);
+  }, [hist, JSON.stringify(goals), off.length]);
+  const remove = i => saveSettings(uid, { goals: goals.filter((_, j) => j !== i), goalsOff: [...off, goals[i].name] });
   const add = () => {
     const n = hist.has(name) ? name : null; if (!n || !(+reps > 0)) return;
     if (+reps > T.MAX_REPS) { setReps(String(T.MAX_REPS)); return; }
-    save([...goals, { name: n, kg: +kg || 0, reps: +reps }]); setName(''); setKg(''); setReps(''); setOpen(false);
+    saveSettings(uid, { goals: [...goals.filter(g => g.name !== n), { name: n, kg: +kg || 0, reps: +reps }], goalsOff: off.filter(x => x !== n) }); setName(''); setKg(''); setReps(''); setOpen(false);
   };
   const names = [...hist.keys()].sort();
   return (
     <div className="card">
       <div className="row sp"><h3>Goals</h3><button className="sm" onClick={() => setOpen(!open)}>{open ? 'Close' : '+ Add'}</button></div>
-      <div className="dim" style={{ fontSize: 12, marginBottom: 6 }}>Goal = one set of kg × reps. Progress compares your best single set (kg × reps) with the target.</div>
+      <div className="dim" style={{ fontSize: 12, marginBottom: 6 }}>Goal = one set of kg × reps. Your 5 most-done exercises get a goal automatically, and when you hit a goal it moves up: more reps, then +2.5 kg at 25 reps. Tap × to drop one.</div>
       {open && <div style={{ marginBottom: 10 }}>
         <input list="exnames" placeholder="Exercise" value={name} onChange={e => setName(e.target.value)} />
         <datalist id="exnames">{names.map(n => <option key={n} value={n} />)}</datalist>
@@ -87,7 +94,7 @@ function Goals({ uid, settings, workouts, today }) {
         const p = T.goalProgress(g, hist, today);
         const color = p.done ? 'var(--green)' : 'var(--blue)';
         return <div key={i} style={{ padding: '8px 0', borderBottom: '1px solid #1e293b' }}>
-          <div className="row sp"><b style={{ fontSize: 14 }}>{g.name}</b><button className="sm" onClick={() => save(goals.filter((_, j) => j !== i))}>×</button></div>
+          <div className="row sp"><b style={{ fontSize: 14 }}>{g.name}</b><button className="sm" onClick={() => remove(i)}>×</button></div>
           <div className="row sp" style={{ fontSize: 13, margin: '2px 0 4px' }}>
             <span>Target {setTxt(g)}{p.done ? ' ✓' : ''}</span><span className="mute">{Math.round(p.pct * 100)}%</span></div>
           <Bar v={p.pct} color={color} />
@@ -103,7 +110,7 @@ function Goals({ uid, settings, workouts, today }) {
         <div className="dim" style={{ fontSize: 12, marginBottom: 4 }}>Suggested (your most-done exercises)</div>
         {sug.map(s => <div key={s.name} className="row sp" style={{ padding: '4px 0', fontSize: 13 }}>
           <span>{s.name}<br /><span className="dim">best {setTxt(s.now)} → {setTxt(s)}</span></span>
-          <button className="sm" onClick={() => save([...goals, { name: s.name, kg: s.kg, reps: s.reps }])}>Add</button></div>)}
+          <button className="sm" onClick={() => saveSettings(uid, { goals: [...goals, { name: s.name, kg: s.kg, reps: s.reps }], goalsOff: off.filter(x => x !== s.name) })}>Add</button></div>)}
       </div>}
     </div>
   );
