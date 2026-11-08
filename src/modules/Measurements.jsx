@@ -32,10 +32,15 @@ export default function Measurements({ uid, settings }) {
   const [tapeMsg, setTapeMsg] = useState('');
   const [reading, setReading] = useState(false);
 
-  // One-time tidy: the old separate Abdomen value moves into Navel (only where Navel is empty).
+  // One-time tidy: the old separate Abdomen / tape Waist values move into Navel / Waist (only where those are empty).
+  const stale = rows.filter(r => r.t_abdomen != null || r.t_waist != null);
   React.useEffect(() => {
-    rows.filter(r => r.t_abdomen != null).forEach(r => put(uid, 'measurements', r.id, { ...(r.navel == null ? { navel: r.t_abdomen } : {}), t_abdomen: deleteField() }));
-  }, [rows.filter(r => r.t_abdomen != null).length]);
+    stale.forEach(r => put(uid, 'measurements', r.id, {
+      ...(r.t_abdomen != null && r.navel == null ? { navel: r.t_abdomen } : {}),
+      ...(r.t_waist != null && r.waist == null ? { waist: r.t_waist } : {}),
+      t_abdomen: deleteField(), t_waist: deleteField(),
+    }));
+  }, [stale.length]);
 
   const data = useMemo(() => rows.slice().sort((a, b) => a.date.localeCompare(b.date)), [rows]);
   const ma = useMemo(() => withMA(data), [data]);
@@ -59,7 +64,7 @@ export default function Measurements({ uid, settings }) {
   const tapeRows = data.filter(r => TAPE.some(([k]) => r[k] != null));
   const tapeFirst = k => tapeRows.find(r => r[k] != null)?.[k];
   const tapeLast = k => [...tapeRows].reverse().find(r => r[k] != null)?.[k];
-  const whrOf = r => (r.t_waist && r.t_hip ? r.t_waist / r.t_hip : null);
+  const whrOf = r => (r.waist && r.t_hip ? r.waist / r.t_hip : null);
   const whrRows = data.filter(r => whrOf(r) != null);
   const lastWhr = whrRows.length ? whrOf(whrRows.at(-1)) : null;
   TAPE.forEach(([k, l]) => { METRICS[k] = { label: l, unit: 'cm', digits: 1, yPad: 1, get: r => r[k], goal: null, start: tapeFirst(k) }; });
