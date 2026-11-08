@@ -3,6 +3,7 @@ import Chart from '../Chart';
 import { useCollection, put, remove, putMany } from '../lib/db';
 import { MODE_COLORS } from '../lib/defaults';
 import { TAPE } from '../lib/tape';
+import { deleteField } from 'firebase/firestore';
 import { extractTape } from '../lib/gemini';
 import { todayStr, addDays, daysBetween, num, fmt, rfm, whtr, withMA, slopePerWeek, phaseFor } from '../lib/calc';
 
@@ -30,6 +31,11 @@ export default function Measurements({ uid, settings }) {
   const [tape, setTape] = useState({ date: todayStr() });
   const [tapeMsg, setTapeMsg] = useState('');
   const [reading, setReading] = useState(false);
+
+  // One-time tidy: the old separate Abdomen value moves into Navel (only where Navel is empty).
+  React.useEffect(() => {
+    rows.filter(r => r.t_abdomen != null).forEach(r => put(uid, 'measurements', r.id, { ...(r.navel == null ? { navel: r.t_abdomen } : {}), t_abdomen: deleteField() }));
+  }, [rows.filter(r => r.t_abdomen != null).length]);
 
   const data = useMemo(() => rows.slice().sort((a, b) => a.date.localeCompare(b.date)), [rows]);
   const ma = useMemo(() => withMA(data), [data]);
