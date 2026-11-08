@@ -109,6 +109,8 @@ export default function Measurements({ uid, settings }) {
       const got = await extractTape({ key: settings.geminiKey, model: settings.geminiModel, base64, mime: f.type || 'image/png' });
       const next = { ...tape };
       TAPE.forEach(([k]) => { const v = got[k.slice(2)]; if (v != null) next[k] = String(v); });
+      // Renpho's Waist and Abdomen are the same as this app's Waist and Navel
+      setForm(f => ({ ...f, ...(got.waist != null ? { waist: String(got.waist) } : {}), ...(got.abdomen != null ? { navel: String(got.abdomen) } : {}) }));
       setTape(next); setTapeMsg('Read from screenshot – check the numbers, then save.');
     } catch (err) { setTapeMsg(err.message); }
     setReading(false); e.target.value = '';
