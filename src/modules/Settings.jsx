@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { saveSettings, getAll, putMany } from '../lib/db';
+import { saveSettings, getAll, putMany, useCollection, remove } from '../lib/db';
 import { DEFAULTS } from '../lib/defaults';
 import { downloadFile, todayStr, num } from '../lib/calc';
 import { parseCSV, toCSV } from '../lib/csv';
@@ -13,6 +13,7 @@ const N = ({ v, set }) => <input inputMode="decimal" value={v ?? ''} onChange={e
 
 export default function Settings({ uid, settings, user, onSignOut }) {
   const [d, setD] = useState(settings);
+  const products = useCollection(uid, 'products');
   const [saved, setSaved] = useState('');
   const [msg, setMsg] = useState('');
   const [keyMsg, setKeyMsg] = useState('');
@@ -159,6 +160,16 @@ export default function Settings({ uid, settings, user, onSignOut }) {
       </div>
 
       <div className="row" style={{ marginBottom: 12 }}><button className="ok" onClick={save}>Save settings</button><span className="g">{saved}</span></div>
+
+      <div className="card">
+        <h3 style={{ marginBottom: 4 }}>Product cache</h3>
+        <div className="dim" style={{ fontSize: 12, marginBottom: 6 }}>When you log a branded product (Arla, Salakis…), the app looks up its nutrition online once and saves it here. Next time it is reused instantly, with no web search. Delete an entry if it looks wrong and it will be looked up again.</div>
+        <label className="row" style={{ gap: 8, marginBottom: 8 }}><input type="checkbox" style={{ width: 'auto' }} checked={settings.lookupProducts !== false} onChange={e => saveSettings(uid, { lookupProducts: e.target.checked })} /> Look up branded products online</label>
+        {[...products].sort((a, b) => a.name.localeCompare(b.name)).map(p => <div key={p.id} className="row sp" style={{ padding: '4px 0', fontSize: 13, borderTop: '1px solid #1e293b' }}>
+          <span>{p.name}<br /><span className="dim">{Math.round(p.per100.kcal)} kcal · P {p.per100.p} · F {p.per100.f} · C {p.per100.c} /100 g{p.pack ? ` · pack ${p.pack} g` : ''}{p.source ? <> · <a href={p.source} target="_blank" rel="noreferrer" style={{ color: 'var(--blue)' }}>source</a></> : ''}</span></span>
+          <button className="sm" onClick={() => remove(uid, 'products', p.id)}>×</button></div>)}
+        {!products.length && <div className="dim">Nothing saved yet.</div>}
+      </div>
 
       <div className="card">
         <h3 style={{ marginBottom: 4 }}>Muscle priority</h3>

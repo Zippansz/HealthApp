@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { useCollection, put, remove, saveSettings } from '../lib/db';
 import { todayStr, addDays, num, phaseFor, expenditure, daysBetween } from '../lib/calc';
 import { askGemini } from '../lib/gemini';
+import { resolveProducts } from '../lib/products';
 import { applyActions, describe } from '../lib/actions';
 import Bars, { MACRO_COLORS } from '../Bars';
 
@@ -40,6 +41,8 @@ export default function Intake({ uid, settings }) {
   const imported = useCollection(uid, 'nutrition'); // small (one doc per day), so load all of it
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
+  const [step, setStep] = useState(''), [note, setNote] = useState('');
+  const products = useCollection(uid, 'products');
   const [photos, setPhotos] = useState([]);
   const addPhotos = async e => {
     const files = [...e.target.files]; e.target.value = '';
@@ -121,11 +124,15 @@ export default function Intake({ uid, settings }) {
         if (!Array.isArray(actions)) throw new Error('JSON needs an "actions" list.');
         await finish(j.reply || 'Imported from pasted JSON.', actions);
       } else {
-        const r = await askGemini({ key: settings.geminiKey, model: settings.geminiModel, text: t, images: photos, today: date, context: dayMeals.map(m => m.name).join(', ') });
+        setNote(''); setStep('Checking products…');
+        const pr = await resolveProducts({ uid, key: settings.geminiKey, model: settings.geminiModel, text: t, products, enabled: settings.lookupProducts !== false }).catch(() => ({ ref: '', used: [] }));
+        setStep('Calculating…');
+        if (pr.used.length) setNote(pr.used.map(u => `${u.cached ? '✓ saved' : '🔎 found online'}: ${u.name} (${Math.round(u.per100.kcal)} kcal/100 g)`).join(' · '));
+        const r = await askGemini({ key: settings.geminiKey, model: settings.geminiModel, text: t, images: photos, today: date, context: dayMeals.map(m => m.name).join(', '), reference: pr.ref });
         await finish(r.reply, (r.actions || []).map(a => ({ ...a, date: a.date || date })));
       }
     } catch (e) { setErr(e.message); }
-    setBusy(false);
+    setBusy(false); setStep('');
   };
   const quick = f => put(uid, 'meals', crypto.randomUUID(), { date, ts: Date.now(), name: f.name, amount: f.amount || '', p: f.p || 0, f: f.f || 0, c: f.c || 0, kcal: f.kcal || 0 });
   const addManual = async () => {
@@ -176,10 +183,11 @@ export default function Intake({ uid, settings }) {
           </div>)}
         <div className="row" style={{ marginTop: 8 }}>
           <label className="chip" style={{ margin: 0 }}>📷 Photo<input type="file" accept="image/*" multiple onChange={addPhotos} style={{ display: 'none' }} /></label>
-          <button className="pri" onClick={run} disabled={busy || (!text.trim() && !photos.length)}>{busy ? 'Thinking…' : 'Analyze'}</button>
+          <button className="pri" onClick={run} disabled={busy || (!text.trim() && !photos.length)}>{busy ? (step || 'Thinking…') : 'Analyze'}</button>
           {!settings.geminiKey && <span className="a" style={{ fontSize: 13 }}>Add your Gemini key in Settings first.</span>}
         </div>
         {err && <div className="msg r">{err}</div>}
+        {note && <div className="dim" style={{ fontSize: 12, marginTop: 6 }}>{note}</div>}
         {pending && (
           <div className="msg">
             {pending.reply && <div className="mute" style={{ marginBottom: 6 }}>{pending.reply}</div>}

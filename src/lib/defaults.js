@@ -1,6 +1,7 @@
 // Everything here is only a starting point. All of it can be edited in Settings.
 export const DEFAULTS = {
   musclePriority: [],
+  lookupProducts: true,
   goals: [],
   goalsOff: [],
   heightCm: 177,
