@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { saveSettings, getAll, putMany, useCollection, remove } from '../lib/db';
+import { saveSettings, getAll, putMany, useCollection, remove, put } from '../lib/db';
 import { DEFAULTS } from '../lib/defaults';
 import { downloadFile, todayStr, num } from '../lib/calc';
 import { parseCSV, toCSV } from '../lib/csv';
@@ -10,6 +10,19 @@ import { importHealthCSV, syncSheets } from '../lib/health';
 
 const Field = ({ label, children }) => <label style={{ display: 'block' }}><div className="lbl" style={{ marginBottom: 3 }}>{label}</div>{children}</label>;
 const N = ({ v, set }) => <input inputMode="decimal" value={v ?? ''} onChange={e => set(e.target.value === '' ? '' : e.target.value)} />;
+
+function ProductRow({ p, uid }) {
+  const [edit, setEdit] = useState(false);
+  const base = p.per100 || p.perPiece; const unit = p.per100 ? '/100 g' : '/piece';
+  const [v, setV] = useState({ kcal: base.kcal, p: base.p, f: base.f, c: base.c });
+  const save = async () => { const o = Object.fromEntries(Object.entries(v).map(([k, x]) => [k, num(x) ?? 0])); await put(uid, 'products', p.id, p.per100 ? { per100: o, learned: false } : { perPiece: o, learned: false }); setEdit(false); };
+  return <div style={{ padding: '4px 0', fontSize: 13, borderTop: '1px solid #1e293b' }}>
+    <div className="row sp"><span>{p.name}{p.type === 'generic' ? <span className="dim"> · plain food{p.learned ? ' (from your logs)' : ''}</span> : ''}<br />
+      <span className="dim">{Math.round(base.kcal)} kcal · P {base.p} · F {base.f} · C {base.c} {unit}{p.pack ? ` · pack ${p.pack} g` : ''}{p.source ? <> · <a href={p.source} target="_blank" rel="noreferrer" style={{ color: 'var(--blue)' }}>source</a></> : ''}</span></span>
+      <span><button className="sm" onClick={() => setEdit(!edit)}>Edit</button> <button className="sm" onClick={() => remove(uid, 'products', p.id)}>×</button></span></div>
+    {edit && <div style={{ marginTop: 6, display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 6 }}>{[['kcal', 'kcal'], ['p', 'P'], ['f', 'F'], ['c', 'C']].map(([k, l]) => <input key={k} inputMode="decimal" placeholder={l} value={v[k]} onChange={e => setV({ ...v, [k]: e.target.value })} />)}<button className="ok" onClick={save}>Save</button></div>}
+  </div>;
+}
 
 export default function Settings({ uid, settings, user, onSignOut }) {
   const [d, setD] = useState(settings);
@@ -163,11 +176,9 @@ export default function Settings({ uid, settings, user, onSignOut }) {
 
       <div className="card">
         <h3 style={{ marginBottom: 4 }}>Product cache</h3>
-        <div className="dim" style={{ fontSize: 12, marginBottom: 6 }}>When you log a branded product (Arla, Salakis…), the app looks up its nutrition online once and saves it here. Next time it is reused instantly, with no web search. Delete an entry if it looks wrong and it will be looked up again.</div>
+        <div className="dim" style={{ fontSize: 12, marginBottom: 6 }}>Branded products (Arla, Salakis…) are looked up online once; plain foods (banana, eggs, chicken breast…) are remembered from what you log. Saved items are reused instantly next time. Delete an entry if it looks wrong and it will be looked up again.</div>
         <label className="row" style={{ gap: 8, marginBottom: 8 }}><input type="checkbox" style={{ width: 'auto' }} checked={settings.lookupProducts !== false} onChange={e => saveSettings(uid, { lookupProducts: e.target.checked })} /> Look up branded products online</label>
-        {[...products].sort((a, b) => a.name.localeCompare(b.name)).map(p => <div key={p.id} className="row sp" style={{ padding: '4px 0', fontSize: 13, borderTop: '1px solid #1e293b' }}>
-          <span>{p.name}<br /><span className="dim">{Math.round(p.per100.kcal)} kcal · P {p.per100.p} · F {p.per100.f} · C {p.per100.c} /100 g{p.pack ? ` · pack ${p.pack} g` : ''}{p.source ? <> · <a href={p.source} target="_blank" rel="noreferrer" style={{ color: 'var(--blue)' }}>source</a></> : ''}</span></span>
-          <button className="sm" onClick={() => remove(uid, 'products', p.id)}>×</button></div>)}
+        {[...products].sort((a, b) => a.name.localeCompare(b.name)).map(p => <ProductRow key={p.id} p={p} uid={uid} />)}
         {!products.length && <div className="dim">Nothing saved yet.</div>}
       </div>
 

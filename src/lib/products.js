@@ -6,11 +6,55 @@ export const tokens = s => (s || '').toLowerCase().normalize('NFD').replace(/[̀
   .split(/\s+/).map(t => t.replace(/^[-.]+|[-.]+$/g, '')).filter(t => t && !STOP.has(t) && !/^\d+([.,]\d+)?(g|kg|ml|dl|cl|l|st)?$/.test(t));
 const slug = toks => [...new Set(toks)].sort().join('-').slice(0, 120);
 
-// A cached product matches when every word of its key (brand + product words) appears in the text.
+const stem = t => (t.length > 3 && t.endsWith('s') && !t.endsWith('ss') ? t.slice(0, -1) : t);
+const segments = text => (text || '').split(/[\n,;+]|\band\b|\boch\b|\.\s/i).map(x => x.trim()).filter(Boolean);
+
+// Brand products match when every word of the key appears in the text. Plain foods (type 'generic')
+// must match a whole item of the text (so "rice" does not match "rice cakes").
 export function findCached(products, text) {
   const have = new Set(tokens(text));
-  return products.filter(p => p.keyTokens?.length >= 2 && p.keyTokens.every(t => have.has(t)))
-    .sort((a, b) => b.keyTokens.length - a.keyTokens.length);
+  const segs = segments(text).map(x => new Set(tokens(x).map(stem)));
+  const hit = products.filter(p => {
+    if (!(p.keyTokens?.length)) return false;
+    if (p.type === 'generic') return segs.some(sg => sg.size === p.keyTokens.length && p.keyTokens.every(t => sg.has(stem(t))));
+    return p.keyTokens.length >= 2 && p.keyTokens.every(t => have.has(t));
+  });
+  return hit.sort((a, b) => b.keyTokens.length - a.keyTokens.length);
+}
+
+// True when every item in the text is already in the cache (then no extra AI call is needed to find products).
+export function allCovered(products, text) {
+  const segs = segments(text).filter(x => tokens(x).length);
+  return segs.length > 0 && segs.every(x => findCached(products, x).length > 0);
+}
+
+// After the AI has logged plain foods, remember their values per 100 g (or per piece) for next time.
+export async function learnFromActions(uid, actions, products) {
+  const have = new Set(products.map(p => p.key));
+  const jobs = [];
+  for (const a of actions) {
+    if (a.type !== 'add_meal' || !(a.kcal > 0)) continue;
+    const toks = [...new Set(tokens(a.name).map(stem))];
+    if (!toks.length || toks.length > 4) continue;
+    const key = 'g-' + slug(toks); if (have.has(key)) continue;
+    const base = { key, type: 'generic', keyTokens: toks, name: a.name, source: '', learned: true, ts: Date.now() };
+    const g = /(\d+(?:[.,]\d+)?)\s*(kg|g|gram|ml|dl|cl|l)\b/i.exec(a.amount || '');
+    const q = /^\s*(\d+(?:[.,]\d+)?)\s*(st|stycken|pcs|x)?\s*$/i.exec(a.amount || '');
+    let doc = null;
+    if (g) {
+      const mult = { kg: 1000, g: 1, gram: 1, ml: 1, dl: 100, cl: 10, l: 1000 }[g[2].toLowerCase()];
+      const grams = parseFloat(g[1].replace(',', '.')) * mult;
+      if (grams >= 10) doc = { ...base, per100: { kcal: a.kcal / grams * 100, p: a.p / grams * 100, f: a.f / grams * 100, c: a.c / grams * 100 } };
+    } else if (q && parseFloat(q[1]) > 0 && parseFloat(q[1]) <= 20) {
+      const n = parseFloat(q[1].replace(',', '.'));
+      doc = { ...base, perPiece: { kcal: a.kcal / n, p: a.p / n, f: a.f / n, c: a.c / n } };
+    }
+    if (!doc) continue;
+    const r1 = o => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, Math.round(v * 10) / 10]));
+    if (doc.per100) doc.per100 = r1(doc.per100); if (doc.perPiece) doc.perPiece = r1(doc.perPiece);
+    have.add(key); jobs.push(put(uid, 'products', key, doc).catch(() => {}));
+  }
+  await Promise.all(jobs);
 }
 
 async function gem({ key, model, body, signal }) {
@@ -60,9 +104,10 @@ async function webLookup({ key, model, brand, product }) {
 export async function resolveProducts({ uid, key, model, text, products, enabled = true }) {
   if (!enabled || !text?.trim()) return { ref: '', used: [] };
   const used = [], refs = new Map();
-  const add = (p, cached) => { if (!refs.has(p.id || p.key)) { refs.set(p.id || p.key, p); used.push({ name: p.name, cached, per100: p.per100 }); } };
+  const add = (p, cached) => { if (!refs.has(p.id || p.key)) { refs.set(p.id || p.key, p); used.push({ name: p.name, cached, per100: p.per100 || null }); } };
   findCached(products, text).forEach(p => add(p, true));
   let items = [];
+  if (allCovered(products, text)) return { ref: fmtRefs([...refs.values()]), used };
   try { items = await brandedItems({ key, model, text }); } catch { return { ref: fmtRefs([...refs.values()]), used }; }
   const todo = items.filter(it => {
     const toks = tokens(`${it.brand} ${it.product}`);
@@ -79,4 +124,4 @@ export async function resolveProducts({ uid, key, model, text, products, enabled
   return { ref: fmtRefs([...refs.values()]), used };
 }
 
-const fmtRefs = list => list.map(p => `- ${p.name}: per 100 g: ${Math.round(p.per100.kcal)} kcal, P ${p.per100.p}, F ${p.per100.f}, C ${p.per100.c}${p.pack ? `; whole pack ${p.pack} g` : ''}${p.piece ? `; one piece ${p.piece} g` : ''}`).join('\n');
+const fmtRefs = list => list.map(p => `- ${p.name}: ${p.per100 ? `per 100 g: ${Math.round(p.per100.kcal)} kcal, P ${p.per100.p}, F ${p.per100.f}, C ${p.per100.c}` : ''}${p.perPiece ? `per 1 piece: ${Math.round(p.perPiece.kcal)} kcal, P ${p.perPiece.p}, F ${p.perPiece.f}, C ${p.perPiece.c}` : ''}${p.pack ? `; whole pack ${p.pack} g` : ''}${p.piece ? `; one piece ${p.piece} g` : ''}`).join('\n');
