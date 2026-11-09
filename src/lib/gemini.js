@@ -22,7 +22,7 @@ const SCHEMA = {
   required: ['actions'],
 };
 
-export async function askGemini({ key, model, text, today, context, images = [], reference = '' }) {
+export async function askGemini({ key, model, text, today, context, images = [], reference = '', deep = false }) {
   if (!key) throw new Error('No Gemini key yet. Add it in Settings.');
   const system = `You are the logging engine of a personal health app. Today is ${today}.
 Turn the user's text into actions. Estimate nutrition realistically for the stated amounts (Swedish and English food names are both common).
@@ -33,14 +33,14 @@ Turn the user's text into actions. Estimate nutrition realistically for the stat
 - add_favorite / remove_favorite: a reusable meal with its macros.
 Photos may be attached: a recipe (ingredients and amounts, possibly a screenshot or book page), a food package or label, or a plate of food. Read them carefully. For a recipe, work out the nutrition of the WHOLE recipe from its ingredients and amounts, then apply what the user asks: a portion ("1/4 of this recipe", "2 portions") means scale the whole recipe accordingly and log it as ONE add_meal named after the dish with the portion as amount (e.g. "1/4 portion"). Substitutions ("low fat mayo instead", "skip the cheese") must change the ingredient values before scaling. If the recipe states servings and the user gives no portion, log one serving. If a label shows values per 100 g, scale to the amount given. Only split a dish into several items if the user asks.
 Put a short friendly summary in "reply". Never invent actions the user did not ask for.
-${reference ? `\nVERIFIED PRODUCT DATA (looked up online or from the user's saved products). For these products use EXACTLY these per-100 g values scaled to the stated amount; if the amount is in pieces/packets, use the piece or pack weight given:\n${reference}\n` : ''}Today's logged meals: ${context || 'none'}`;
+${reference ? `\nVERIFIED PRODUCT DATA (looked up online or from the user's saved products). For these products use EXACTLY these per-100 g values scaled to the stated amount; if the amount is in pieces/packets, use the piece or pack weight given:\n${reference}\n` : ''}${deep ? '\nTHE USER DESCRIBED SOMETHING IN DETAIL (extra words like "and", "with", "thin", "small", "half"). Do not just look up a typical value. Reason it through before answering: work out the likely ingredients and their weights for the described size/thickness/variant, apply every modifier (thin/small = less, extra/large = more), add up protein, fat and carbs, then derive kcal. Be realistic rather than generic.\n' : ''}Today's logged meals: ${context || 'none'}`;
   const call = thinking => fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
     body: JSON.stringify({
       systemInstruction: { parts: [{ text: system }] },
       contents: [{ role: 'user', parts: [{ text: text || 'Log what is in the attached photo(s).' }, ...images.map(i => ({ inlineData: { mimeType: i.mime, data: i.data } }))] }],
-      generationConfig: { responseMimeType: 'application/json', responseSchema: SCHEMA, temperature: 0.2, ...(thinking ? { thinkingConfig: { thinkingLevel: 'low' } } : {}) },
+      generationConfig: { responseMimeType: 'application/json', responseSchema: SCHEMA, temperature: 0.2, ...(thinking ? { thinkingConfig: { thinkingLevel: deep ? 'medium' : 'low' } } : {}) },
     }),
   });
   // Short thinking = much faster answers. If a model rejects the setting, retry without it.

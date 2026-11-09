@@ -7,17 +7,23 @@ export const tokens = s => (s || '').toLowerCase().normalize('NFD').replace(/[̀
 const slug = toks => [...new Set(toks)].sort().join('-').slice(0, 120);
 
 const stem = t => (t.length > 3 && t.endsWith('s') && !t.endsWith('ss') ? t.slice(0, -1) : t);
-const segments = text => (text || '').split(/[\n,;+]|\band\b|\boch\b|\.\s/i).map(x => x.trim()).filter(Boolean);
+// Items are separated by commas, dots and line breaks only (not "and"/"och": those mean the user is describing something).
+const segments = text => (text || '').split(/\n|,(?!\d)|\.(?:\s|$)/).map(x => x.trim()).filter(Boolean);
+// A described item ("and", "with", "thin", "small"…) is not a simple lookup: the AI should work it out.
+const COMPLEX = /\b(and|och|with|w\/|med|plus|without|utan|instead|istället|thin|thick|small|large|big|medium|tiny|little|half|extra|liten|litet|lilla|små|stor|stora|tunn|tunna|tjock|tjocka|halv|halva|ca|about|approx|roughly)\b|\+/i;
+export const isComplex = seg => COMPLEX.test(seg);
+export const needsReasoning = text => segments(text).some(isComplex);
 
 // Brand products match when every word of the key appears in the text. Plain foods (type 'generic')
 // must match a whole item of the text (so "rice" does not match "rice cakes").
 export function findCached(products, text) {
-  const have = new Set(tokens(text));
-  const segs = segments(text).map(x => new Set(tokens(x).map(stem)));
+  const simple = segments(text).filter(x => !isComplex(x));
+  const raw = simple.map(x => new Set(tokens(x)));
+  const segs = simple.map(x => new Set(tokens(x).map(stem)));
   const hit = products.filter(p => {
     if (!(p.keyTokens?.length)) return false;
     if (p.type === 'generic') return segs.some(sg => sg.size === p.keyTokens.length && p.keyTokens.every(t => sg.has(stem(t))));
-    return p.keyTokens.length >= 2 && p.keyTokens.every(t => have.has(t));
+    return p.keyTokens.length >= 2 && raw.some(have => p.keyTokens.every(t => have.has(t)));
   });
   return hit.sort((a, b) => b.keyTokens.length - a.keyTokens.length);
 }

@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { useCollection, put, remove, saveSettings } from '../lib/db';
 import { todayStr, addDays, num, phaseFor, expenditure, daysBetween } from '../lib/calc';
 import { askGemini } from '../lib/gemini';
-import { resolveProducts, learnFromActions } from '../lib/products';
+import { resolveProducts, learnFromActions, needsReasoning } from '../lib/products';
 import { applyActions, describe } from '../lib/actions';
 import Bars, { MACRO_COLORS } from '../Bars';
 
@@ -124,12 +124,13 @@ export default function Intake({ uid, settings }) {
         if (!Array.isArray(actions)) throw new Error('JSON needs an "actions" list.');
         await finish(j.reply || 'Imported from pasted JSON.', actions);
       } else {
+        const deep = needsReasoning(t);
         setNote(''); setStep('Checking products…');
         const pr = await resolveProducts({ uid, key: settings.geminiKey, model: settings.geminiModel, text: t, products, enabled: settings.lookupProducts !== false }).catch(() => ({ ref: '', used: [] }));
-        setStep('Calculating…');
+        setStep(deep ? 'Thinking it through…' : 'Calculating…');
         if (pr.used.length) setNote(pr.used.map(u => `${u.cached ? '✓ saved' : '🔎 found online'}: ${u.name}${u.per100 ? ` (${Math.round(u.per100.kcal)} kcal/100 g)` : ''}`).join(' · '));
-        const r = await askGemini({ key: settings.geminiKey, model: settings.geminiModel, text: t, images: photos, today: date, context: dayMeals.map(m => m.name).join(', '), reference: pr.ref });
-        learnFromActions(uid, r.actions || [], products).catch(() => {});
+        const r = await askGemini({ key: settings.geminiKey, model: settings.geminiModel, text: t, images: photos, today: date, context: dayMeals.map(m => m.name).join(', '), reference: pr.ref, deep });
+        if (!deep) learnFromActions(uid, r.actions || [], products).catch(() => {});
         await finish(r.reply, (r.actions || []).map(a => ({ ...a, date: a.date || date })));
       }
     } catch (e) { setErr(e.message); }
