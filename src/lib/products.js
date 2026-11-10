@@ -63,11 +63,11 @@ export async function learnFromActions(uid, actions, products) {
   await Promise.all(jobs);
 }
 
-async function gem({ key, model, body, signal }) {
+async function gem({ key, model, body, signal, level = 'low' }) {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
   const call = thinking => fetch(url, {
     method: 'POST', signal, headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
-    body: JSON.stringify({ ...body, generationConfig: { ...(body.generationConfig || {}), ...(thinking ? { thinkingConfig: { thinkingLevel: 'low' } } : {}) } }),
+    body: JSON.stringify({ ...body, generationConfig: { ...(body.generationConfig || {}), ...(thinking ? { thinkingConfig: { thinkingLevel: level } } : {}) } }),
   });
   let res = await call(/gemini-3/.test(model));
   if (res.status === 400 && /gemini-3/.test(model)) res = await call(false);
@@ -86,13 +86,15 @@ async function brandedItems({ key, model, text }) {
 }
 
 // Step 2: look the product up on the web (Google Search grounding), per 100 g/ml.
-async function webLookup({ key, model, brand, product }) {
-  const ctl = new AbortController(); const timer = setTimeout(() => ctl.abort(), 25000);
+async function webLookup({ key, model, brand, product, original }) {
+  const ctl = new AbortController(); const timer = setTimeout(() => ctl.abort(), 60000);
   try {
     const q = `${brand} ${product}`.trim();
-    const j = await gem({ key, model, signal: ctl.signal, body: {
+    const j = await gem({ key, model, signal: ctl.signal, level: 'high', body: {
       tools: [{ google_search: {} }],
-      contents: [{ role: 'user', parts: [{ text: `Find the exact nutrition facts (näringsvärde) for the product "${q}" as sold in Sweden. Prefer the manufacturer's page or a Swedish retailer (arla.se, willys.se, ica.se, coop.se, mathem.se). Values must be per 100 g (or per 100 ml for drinks) and for the exact variant named (fat %, flavour). If the wording is vague about fat ("low fat", "light", "fat free"), pick the lowest-fat variant of that brand that really exists (e.g. 0% fett) and put the variant in "name". Reply with ONLY one JSON object, no other text: {"name":"full product name","brand":"brand","kcal":number,"protein":number,"fat":number,"carbs":number,"pack_g":number or null,"piece_g":number or null,"source":"url of the page used","found":true or false}. Set found=false if you cannot find this exact product.` }] }],
+      contents: [{ role: 'user', parts: [{ text: `A user of a Swedish food-logging app wrote: "${original}". They mean the product "${brand} ${product}", but their wording may be imprecise or partly wrong (wrong fat %, translated or shortened names, English instead of Swedish, e.g. "low fat" for a product sold as "0% fett" or "light").
+Work out which real product they most likely mean: search the web (manufacturer pages and Swedish retailers such as arla.se, willys.se, ica.se, coop.se, mathem.se, or Open Food Facts), list the variants of that brand that exist, compare them with every clue in the user's wording (fat %, flavour, size, "mini", etc.) and pick the single most probable match. Do not simply pick the first hit and do not default to the lowest or highest fat version: pick the one that best fits ALL the clues. Then read its exact nutrition facts per 100 g (or per 100 ml for drinks), from the page itself.
+Reply with ONLY one JSON object, no other text: {"name":"full exact product name incl. fat %","brand":"brand","kcal":number,"protein":number,"fat":number,"carbs":number,"pack_g":number or null,"piece_g":number or null,"source":"url of the page used","why":"one short sentence: why this variant","alternatives":["other plausible variants"],"found":true or false}. Set found=false only if no real product fits.` }] }],
       generationConfig: { temperature: 0 } } });
     const m = /\{[\s\S]*\}/.exec(textOf(j)); if (!m) return null;
     const o = JSON.parse(m[0]);
@@ -102,7 +104,7 @@ async function webLookup({ key, model, brand, product }) {
     if (o.found === false || Object.values(r).some(v => v == null)) return null;
     // sanity: kcal should roughly match the macros, and be a believable food
     if (r.kcal < 5 || r.kcal > 900 || Math.abs(r.kcal - (4 * r.p + 4 * r.c + 9 * r.f)) > 0.2 * r.kcal + 12) return null;
-    return { name: o.name || q, brand, per100: r, pack: n(o.pack_g), piece: n(o.piece_g), source: o.source || web[0] || '' };
+    return { name: o.name || q, brand, per100: r, pack: n(o.pack_g), piece: n(o.piece_g), source: o.source || web[0] || '', why: typeof o.why === 'string' ? o.why : '' };
   } catch { return null; } finally { clearTimeout(timer); }
 }
 
@@ -139,12 +141,12 @@ export async function resolveProducts({ uid, key, model, text, products, enabled
     return toks.length && !products.some(p => p.keyTokens?.length && p.keyTokens.every(t => toks.includes(t)) && refs.has(p.id));
   });
   await Promise.all(todo.map(async it => {
-    const hit = (await webLookup({ key, model, brand: it.brand, product: it.product })) || (await offLookup({ brand: it.brand, product: it.product }));
+    const hit = (await webLookup({ key, model, brand: it.brand, product: it.product, original: text })) || (await offLookup({ brand: it.brand, product: it.product }));
     if (!hit) { failed.push(`${it.brand} ${it.product}`.trim()); return; }
     const keyTokens = [...new Set(tokens(`${it.brand} ${it.product}`))];
-    const doc = { key: slug(keyTokens), keyTokens, name: hit.name, brand: hit.brand || it.brand, per100: hit.per100, pack: hit.pack, piece: hit.piece, source: hit.source, ts: Date.now() };
+    const doc = { key: slug(keyTokens), keyTokens, name: hit.name, brand: hit.brand || it.brand, per100: hit.per100, pack: hit.pack, piece: hit.piece, source: hit.source, why: hit.why || '', ts: Date.now() };
     try { await put(uid, 'products', doc.key, doc); } catch { /* cache is best-effort */ }
-    add({ ...doc, id: doc.key }, false);
+    add({ ...doc, id: doc.key }, false); used.at(-1).why = hit.why || '';
   }));
   return { ref: fmtRefs([...refs.values()]), used, failed };
 }
