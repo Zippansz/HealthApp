@@ -92,7 +92,7 @@ async function webLookup({ key, model, brand, product }) {
     const q = `${brand} ${product}`.trim();
     const j = await gem({ key, model, signal: ctl.signal, body: {
       tools: [{ google_search: {} }],
-      contents: [{ role: 'user', parts: [{ text: `Find the exact nutrition facts (näringsvärde) for the product "${q}" as sold in Sweden. Prefer the manufacturer's page or a Swedish retailer (arla.se, willys.se, ica.se, coop.se, mathem.se). Values must be per 100 g (or per 100 ml for drinks) and for the exact variant named (fat %, flavour). Reply with ONLY one JSON object, no other text: {"name":"full product name","brand":"brand","kcal":number,"protein":number,"fat":number,"carbs":number,"pack_g":number or null,"piece_g":number or null,"source":"url of the page used","found":true or false}. Set found=false if you cannot find this exact product.` }] }],
+      contents: [{ role: 'user', parts: [{ text: `Find the exact nutrition facts (näringsvärde) for the product "${q}" as sold in Sweden. Prefer the manufacturer's page or a Swedish retailer (arla.se, willys.se, ica.se, coop.se, mathem.se). Values must be per 100 g (or per 100 ml for drinks) and for the exact variant named (fat %, flavour). If the wording is vague about fat ("low fat", "light", "fat free"), pick the lowest-fat variant of that brand that really exists (e.g. 0% fett) and put the variant in "name". Reply with ONLY one JSON object, no other text: {"name":"full product name","brand":"brand","kcal":number,"protein":number,"fat":number,"carbs":number,"pack_g":number or null,"piece_g":number or null,"source":"url of the page used","found":true or false}. Set found=false if you cannot find this exact product.` }] }],
       generationConfig: { temperature: 0 } } });
     const m = /\{[\s\S]*\}/.exec(textOf(j)); if (!m) return null;
     const o = JSON.parse(m[0]);
@@ -106,10 +106,29 @@ async function webLookup({ key, model, brand, product }) {
   } catch { return null; } finally { clearTimeout(timer); }
 }
 
+// Fallback: Open Food Facts (free product database, has many Swedish products).
+async function offLookup({ brand, product }) {
+  try {
+    const ctl = new AbortController(); const timer = setTimeout(() => ctl.abort(), 12000);
+    const url = `https://world.openfoodfacts.org/cgi/search.pl?search_simple=1&action=process&json=1&page_size=15&fields=product_name,brands,nutriments,code&search_terms=${encodeURIComponent(`${brand} ${product}`)}`;
+    const res = await fetch(url, { signal: ctl.signal }); clearTimeout(timer);
+    if (!res.ok) return null;
+    const want = tokens(product).map(stem), b = tokens(brand).map(stem);
+    const fat = /(\d+(?:[.,]\d+)?)\s*%/.exec(product);
+    const score = x => { const have = new Set(tokens(`${x.product_name || ''} ${x.brands || ''}`).map(stem)); return want.filter(t => have.has(t)).length / (want.length || 1) + (fat && have.has(fat[1].replace(',', '.') + '%') ? 0.5 : 0); };
+    const ok = ((await res.json()).products || []).filter(x => b.every(t => tokens(x.brands || '').map(stem).includes(t)) && x.nutriments?.['energy-kcal_100g'] > 0 && x.nutriments.proteins_100g != null)
+      .sort((x, y) => score(y) - score(x));
+    const x = ok[0]; if (!x || score(x) < 0.5) return null;
+    const n = x.nutriments, r = { kcal: n['energy-kcal_100g'], p: n.proteins_100g, f: n.fat_100g ?? 0, c: n.carbohydrates_100g ?? 0 };
+    if (Math.abs(r.kcal - (4 * r.p + 4 * r.c + 9 * r.f)) > 0.2 * r.kcal + 12) return null;
+    return { name: x.product_name || `${brand} ${product}`, brand, per100: r, pack: null, piece: null, source: `https://world.openfoodfacts.org/product/${x.code}` };
+  } catch { return null; }
+}
+
 // Finds reference values for every branded item in the text: cache first, web second.
 export async function resolveProducts({ uid, key, model, text, products, enabled = true }) {
   if (!enabled || !text?.trim()) return { ref: '', used: [] };
-  const used = [], refs = new Map();
+  const used = [], refs = new Map(), failed = [];
   const add = (p, cached) => { if (!refs.has(p.id || p.key)) { refs.set(p.id || p.key, p); used.push({ name: p.name, cached, per100: p.per100 || null }); } };
   findCached(products, text).forEach(p => add(p, true));
   let items = [];
@@ -120,14 +139,14 @@ export async function resolveProducts({ uid, key, model, text, products, enabled
     return toks.length && !products.some(p => p.keyTokens?.length && p.keyTokens.every(t => toks.includes(t)) && refs.has(p.id));
   });
   await Promise.all(todo.map(async it => {
-    const hit = await webLookup({ key, model, brand: it.brand, product: it.product });
-    if (!hit) return;
+    const hit = (await webLookup({ key, model, brand: it.brand, product: it.product })) || (await offLookup({ brand: it.brand, product: it.product }));
+    if (!hit) { failed.push(`${it.brand} ${it.product}`.trim()); return; }
     const keyTokens = [...new Set(tokens(`${it.brand} ${it.product}`))];
     const doc = { key: slug(keyTokens), keyTokens, name: hit.name, brand: hit.brand || it.brand, per100: hit.per100, pack: hit.pack, piece: hit.piece, source: hit.source, ts: Date.now() };
     try { await put(uid, 'products', doc.key, doc); } catch { /* cache is best-effort */ }
     add({ ...doc, id: doc.key }, false);
   }));
-  return { ref: fmtRefs([...refs.values()]), used };
+  return { ref: fmtRefs([...refs.values()]), used, failed };
 }
 
 const fmtRefs = list => list.map(p => `- ${p.name}: ${p.per100 ? `per 100 g: ${Math.round(p.per100.kcal)} kcal, P ${p.per100.p}, F ${p.per100.f}, C ${p.per100.c}` : ''}${p.perPiece ? `per 1 piece: ${Math.round(p.perPiece.kcal)} kcal, P ${p.perPiece.p}, F ${p.perPiece.f}, C ${p.perPiece.c}` : ''}${p.pack ? `; whole pack ${p.pack} g` : ''}${p.piece ? `; one piece ${p.piece} g` : ''}`).join('\n');

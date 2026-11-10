@@ -128,7 +128,8 @@ export default function Intake({ uid, settings }) {
         setNote(''); setStep('Checking products…');
         const pr = await resolveProducts({ uid, key: settings.geminiKey, model: settings.geminiModel, text: t, products, enabled: settings.lookupProducts !== false }).catch(() => ({ ref: '', used: [] }));
         setStep(deep ? 'Thinking it through…' : 'Calculating…');
-        if (pr.used.length) setNote(pr.used.map(u => `${u.cached ? '✓ saved' : '🔎 found online'}: ${u.name}${u.per100 ? ` (${Math.round(u.per100.kcal)} kcal/100 g)` : ''}`).join(' · '));
+        const bad = (pr.failed || []).map(f => `⚠ couldn't find "${f}" online, AI estimate used`);
+        if (pr.used.length || bad.length) setNote([...pr.used.map(u => `${u.cached ? '✓ saved' : '🔎 found online'}: ${u.name}${u.per100 ? ` (${Math.round(u.per100.kcal)} kcal/100 g)` : ''}`), ...bad].join(' · '));
         const r = await askGemini({ key: settings.geminiKey, model: settings.geminiModel, text: t, images: photos, today: date, context: dayMeals.map(m => m.name).join(', '), reference: pr.ref, deep });
         if (!deep) learnFromActions(uid, r.actions || [], products).catch(() => {});
         await finish(r.reply, (r.actions || []).map(a => ({ ...a, date: a.date || date })));
