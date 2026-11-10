@@ -126,11 +126,11 @@ export default function Intake({ uid, settings }) {
       } else {
         const deep = needsReasoning(t);
         setNote(''); setStep('Looking up products…');
-        const pr = await resolveProducts({ uid, key: settings.geminiKey, model: settings.geminiModel, text: t, products, enabled: settings.lookupProducts !== false }).catch(() => ({ ref: '', used: [] }));
+        const pr = await resolveProducts({ uid, key: settings.geminiKey, model: settings.geminiModel, text: t, products, enabled: settings.lookupProducts !== false, country: settings.country || 'Sweden' }).catch(() => ({ ref: '', used: [] }));
         setStep(deep ? 'Thinking it through…' : 'Calculating…');
         const bad = (pr.failed || []).map(f => `⚠ couldn't find "${f}" online, AI estimate used`);
         if (pr.used.length || bad.length) setNote([...pr.used.map(u => `${u.cached ? '✓ saved' : '🔎 found online'}: ${u.name}${u.per100 ? ` (${Math.round(u.per100.kcal)} kcal/100 g)` : ''}${u.why ? ' – ' + u.why : ''}`), ...bad].join(' · '));
-        const r = await askGemini({ key: settings.geminiKey, model: settings.geminiModel, text: t, images: photos, today: date, context: dayMeals.map(m => m.name).join(', '), reference: pr.ref, deep });
+        const r = await askGemini({ key: settings.geminiKey, model: settings.geminiModel, text: t, images: photos, today: date, context: dayMeals.map(m => m.name).join(', '), reference: pr.ref, deep, country: settings.country || 'Sweden' });
         if (!deep) learnFromActions(uid, r.actions || [], products).catch(() => {});
         await finish(r.reply, (r.actions || []).map(a => ({ ...a, date: a.date || date })));
       }

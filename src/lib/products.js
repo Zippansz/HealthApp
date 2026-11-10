@@ -77,23 +77,23 @@ async function gem({ key, model, body, signal, level = 'low' }) {
 const textOf = j => (j.candidates?.[0]?.content?.parts || []).map(p => p.text || '').join('');
 
 // Step 1: which items in the text name a specific brand/product?
-async function brandedItems({ key, model, text }) {
+async function brandedItems({ key, model, text, country }) {
   const schema = { type: 'OBJECT', properties: { items: { type: 'ARRAY', items: { type: 'OBJECT', properties: { brand: { type: 'STRING' }, product: { type: 'STRING' } }, required: ['brand', 'product'] } } }, required: ['items'] };
   const j = await gem({ key, model, body: {
-    systemInstruction: { parts: [{ text: 'From the food log text, list every item that names a specific brand, store or restaurant product (e.g. Arla, Salakis, Sibylla, Nongshim, Korvbrödsbagaren). "product" = the product name WITHOUT amounts, keeping variant words such as fat %, flavour, "mini", "low fat". Ignore generic foods with no brand. Return {"items":[]} if none.' }] },
+    systemInstruction: { parts: [{ text: `The user lives in ${country}. From the food log text, list every item that names a specific brand, store or restaurant product (e.g. Arla, Salakis, Sibylla, Nongshim, Korvbrödsbagaren). "product" = the product name WITHOUT amounts, keeping variant words such as fat %, flavour, "mini", "low fat". Ignore generic foods with no brand. Return {"items":[]} if none.` }] },
     contents: [{ role: 'user', parts: [{ text }] }], generationConfig: { responseMimeType: 'application/json', responseSchema: schema, temperature: 0 } } });
   try { return JSON.parse(textOf(j)).items || []; } catch { return []; }
 }
 
 // Step 2: look the product up on the web (Google Search grounding), per 100 g/ml.
-async function webLookup({ key, model, brand, product, original }) {
+async function webLookup({ key, model, brand, product, original, country }) {
   const ctl = new AbortController(); const timer = setTimeout(() => ctl.abort(), 60000);
   try {
     const q = `${brand} ${product}`.trim();
     const j = await gem({ key, model, signal: ctl.signal, level: 'high', body: {
       tools: [{ google_search: {} }],
-      contents: [{ role: 'user', parts: [{ text: `A user of a Swedish food-logging app wrote: "${original}". They mean the product "${brand} ${product}", but their wording may be imprecise or partly wrong (wrong fat %, translated or shortened names, English instead of Swedish, e.g. "low fat" for a product sold as "0% fett" or "light").
-Work out which real product they most likely mean: search the web (manufacturer pages and Swedish retailers such as arla.se, willys.se, ica.se, coop.se, mathem.se, or Open Food Facts), list the variants of that brand that exist, compare them with every clue in the user's wording (fat %, flavour, size, "mini", etc.) and pick the single most probable match. Do not simply pick the first hit and do not default to the lowest or highest fat version: pick the one that best fits ALL the clues. Then read its exact nutrition facts per 100 g (or per 100 ml for drinks), from the page itself.
+      contents: [{ role: 'user', parts: [{ text: `A user of a food-logging app, living in ${country}, wrote: "${original}". They mean the product "${brand} ${product}", but their wording may be imprecise or partly wrong (wrong fat %, translated or shortened names, English instead of Swedish, e.g. "low fat" for a product sold as "0% fett" or "light").
+Work out which real product they most likely mean: search the web for the ${country} version of the product (${country === 'Sweden' ? 'manufacturer pages and Swedish retailers such as arla.se, willys.se, ica.se, coop.se, mathem.se, or Open Food Facts' : `${country} retailers, the manufacturer's ${country} site, or Open Food Facts`}). The same brand often has different recipes and numbers in other countries, so never use a US/UK/foreign page for it, list the variants of that brand that exist, compare them with every clue in the user's wording (fat %, flavour, size, "mini", etc.) and pick the single most probable match. Do not simply pick the first hit and do not default to the lowest or highest fat version: pick the one that best fits ALL the clues. Then read its exact nutrition facts per 100 g (or per 100 ml for drinks), from the page itself.
 Reply with ONLY one JSON object, no other text: {"name":"full exact product name incl. fat %","brand":"brand","kcal":number,"protein":number,"fat":number,"carbs":number,"pack_g":number or null,"piece_g":number or null,"source":"url of the page used","why":"one short sentence: why this variant","alternatives":["other plausible variants"],"found":true or false}. Set found=false only if no real product fits.` }] }],
       generationConfig: { temperature: 0 } } });
     const m = /\{[\s\S]*\}/.exec(textOf(j)); if (!m) return null;
@@ -109,11 +109,14 @@ Reply with ONLY one JSON object, no other text: {"name":"full exact product name
 }
 
 // Fallback: Open Food Facts (free product database, has many Swedish products).
-async function offLookup({ brand, product }) {
+async function offLookup({ brand, product, country }) {
   try {
     const ctl = new AbortController(); const timer = setTimeout(() => ctl.abort(), 12000);
-    const url = `https://world.openfoodfacts.org/cgi/search.pl?search_simple=1&action=process&json=1&page_size=15&fields=product_name,brands,nutriments,code&search_terms=${encodeURIComponent(`${brand} ${product}`)}`;
-    const res = await fetch(url, { signal: ctl.signal }); clearTimeout(timer);
+    const base = `https://world.openfoodfacts.org/cgi/search.pl?search_simple=1&action=process&json=1&page_size=15&fields=product_name,brands,nutriments,code&search_terms=${encodeURIComponent(`${brand} ${product}`)}`;
+    const only = `&tagtype_0=countries&tag_contains_0=contains&tag_0=${encodeURIComponent((country || 'sweden').toLowerCase())}`;
+    let res = await fetch(base + only, { signal: ctl.signal });
+    if (res.ok) { const j = await res.clone().json(); if (!(j.products || []).length) res = await fetch(base, { signal: ctl.signal }); }
+    clearTimeout(timer);
     if (!res.ok) return null;
     const want = tokens(product).map(stem), b = tokens(brand).map(stem);
     const fat = /(\d+(?:[.,]\d+)?)\s*%/.exec(product);
@@ -128,20 +131,20 @@ async function offLookup({ brand, product }) {
 }
 
 // Finds reference values for every branded item in the text: cache first, web second.
-export async function resolveProducts({ uid, key, model, text, products, enabled = true }) {
+export async function resolveProducts({ uid, key, model, text, products, enabled = true, country = 'Sweden' }) {
   if (!enabled || !text?.trim()) return { ref: '', used: [] };
   const used = [], refs = new Map(), failed = [];
   const add = (p, cached) => { if (!refs.has(p.id || p.key)) { refs.set(p.id || p.key, p); used.push({ name: p.name, cached, per100: p.per100 || null }); } };
   findCached(products, text).forEach(p => add(p, true));
   let items = [];
   if (allCovered(products, text)) return { ref: fmtRefs([...refs.values()]), used };
-  try { items = await brandedItems({ key, model, text }); } catch { return { ref: fmtRefs([...refs.values()]), used }; }
+  try { items = await brandedItems({ key, model, text, country }); } catch { return { ref: fmtRefs([...refs.values()]), used }; }
   const todo = items.filter(it => {
     const toks = tokens(`${it.brand} ${it.product}`);
     return toks.length && !products.some(p => p.keyTokens?.length && p.keyTokens.every(t => toks.includes(t)) && refs.has(p.id));
   });
   await Promise.all(todo.map(async it => {
-    const hit = (await webLookup({ key, model, brand: it.brand, product: it.product, original: text })) || (await offLookup({ brand: it.brand, product: it.product }));
+    const hit = (await webLookup({ key, model, brand: it.brand, product: it.product, original: text, country })) || (await offLookup({ brand: it.brand, product: it.product, country }));
     if (!hit) { failed.push(`${it.brand} ${it.product}`.trim()); return; }
     const keyTokens = [...new Set(tokens(`${it.brand} ${it.product}`))];
     const doc = { key: slug(keyTokens), keyTokens, name: hit.name, brand: hit.brand || it.brand, per100: hit.per100, pack: hit.pack, piece: hit.piece, source: hit.source, why: hit.why || '', ts: Date.now() };

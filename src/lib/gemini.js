@@ -22,10 +22,10 @@ const SCHEMA = {
   required: ['actions'],
 };
 
-export async function askGemini({ key, model, text, today, context, images = [], reference = '', deep = false }) {
+export async function askGemini({ key, model, text, today, context, images = [], reference = '', deep = false, country = 'Sweden' }) {
   if (!key) throw new Error('No Gemini key yet. Add it in Settings.');
   const system = `You are the logging engine of a personal health app. Today is ${today}.
-Turn the user's text into actions. Estimate nutrition realistically for the stated amounts (Swedish and English food names are both common).
+Turn the user's text into actions. The user lives in ${country}: assume ${country} brands, shops, product versions, portion sizes and recipes, and metric units. For packaged products use the values of the ${country} version (the same brand often has different recipes and numbers in other countries). For plain foods prefer ${country === 'Sweden' ? "the Swedish Food Agency's food database (Livsmedelsverket, livsmedelsdatabasen)" : 'the national food composition database'} over US figures. Estimate nutrition realistically for the stated amounts (Swedish and English food names are both common).
 - add_meal: ALWAYS fill name, amount (as written, e.g. "2 st" or "150 g"), protein p, fat f, carbs c (grams) AND kcal, all realistic and non-zero for real food. kcal must be about 4*p + 4*c + 9*f. Never return 0 kcal for food. One action per food item. Use date only if the user names a day other than today (YYYY-MM-DD).
 - remove_meal: name must exactly match an entry from today's list given below.
 - activity: kcalBurned (exercise calories) and/or steps for the date.
