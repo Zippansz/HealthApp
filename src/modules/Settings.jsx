@@ -14,13 +14,13 @@ const N = ({ v, set }) => <input inputMode="decimal" value={v ?? ''} onChange={e
 function ProductRow({ p, uid }) {
   const [edit, setEdit] = useState(false);
   const base = p.per100 || p.perPiece; const unit = p.per100 ? '/100 g' : '/piece';
-  const [v, setV] = useState({ kcal: base.kcal, p: base.p, f: base.f, c: base.c });
-  const save = async () => { const o = Object.fromEntries(Object.entries(v).map(([k, x]) => [k, num(x) ?? 0])); await put(uid, 'products', p.id, p.per100 ? { per100: o, learned: false } : { perPiece: o, learned: false }); setEdit(false); };
+  const [v, setV] = useState({ kcal: base.kcal, p: base.p, f: base.f, c: base.c, fi: base.fi ?? '', su: base.su ?? '' });
+  const save = async () => { const o = Object.fromEntries(Object.entries(v).filter(([k, x]) => !['fi', 'su'].includes(k) || num(x) != null).map(([k, x]) => [k, num(x) ?? 0])); await put(uid, 'products', p.id, p.per100 ? { per100: o, learned: false } : { perPiece: o, learned: false }); setEdit(false); };
   return <div style={{ padding: '4px 0', fontSize: 13, borderTop: '1px solid #1e293b' }}>
     <div className="row sp"><span>{p.name}{p.type === 'generic' ? <span className="dim"> · plain food{p.learned ? ' (from your logs)' : ''}</span> : ''}<br />
-      <span className="dim">{Math.round(base.kcal)} kcal · P {base.p} · F {base.f} · C {base.c} {unit}{p.pack ? ` · pack ${p.pack} g` : ''}{p.source ? <> · <a href={p.source} target="_blank" rel="noreferrer" style={{ color: 'var(--blue)' }}>source</a></> : ''}</span></span>
+      <span className="dim">{Math.round(base.kcal)} kcal · P {base.p} · F {base.f} · C {base.c}{base.fi != null ? ` · Fi ${base.fi}` : ''}{base.su != null ? ` · Su ${base.su}` : ''} {unit}{p.pack ? ` · pack ${p.pack} g` : ''}{p.source ? <> · <a href={p.source} target="_blank" rel="noreferrer" style={{ color: 'var(--blue)' }}>source</a></> : ''}</span></span>
       <span><button className="sm" onClick={() => setEdit(!edit)}>Edit</button> <button className="sm" onClick={() => remove(uid, 'products', p.id)}>×</button></span></div>
-    {edit && <div style={{ marginTop: 6, display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 6 }}>{[['kcal', 'kcal'], ['p', 'P'], ['f', 'F'], ['c', 'C']].map(([k, l]) => <input key={k} inputMode="decimal" placeholder={l} value={v[k]} onChange={e => setV({ ...v, [k]: e.target.value })} />)}<button className="ok" onClick={save}>Save</button></div>}
+    {edit && <div style={{ marginTop: 6, display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 6 }}>{[['kcal', 'kcal'], ['p', 'P'], ['f', 'F'], ['c', 'C'], ['fi', 'Fi'], ['su', 'Su']].map(([k, l]) => <input key={k} inputMode="decimal" placeholder={l} value={v[k]} onChange={e => setV({ ...v, [k]: e.target.value })} />)}<button className="ok" onClick={save}>Save</button></div>}
   </div>;
 }
 
@@ -42,7 +42,7 @@ export default function Settings({ uid, settings, user, onSignOut }) {
     n.heightCm = num(n.heightCm) ?? 177; n.baseTdee = num(n.baseTdee) ?? 2200; n.stepsInBase = num(n.stepsInBase) ?? 6800; delete n.stepsBaseline; n.kcalPerStep = num(n.kcalPerStep) ?? 0.04;
     Object.keys(n.start).forEach(k => (n.start[k] = num(n.start[k]) ?? 0));
     Object.keys(n.goal).forEach(k => (n.goal[k] = num(n.goal[k]) ?? 0));
-    Object.values(n.modes).forEach(m => ['p', 'kcalMin', 'kcalMax', 'fMax', 'cMax'].forEach(k => (m[k] = num(m[k]) ?? 0)));
+    Object.values(n.modes).forEach(m => ['p', 'kcalMin', 'kcalMax', 'fMax', 'cMax', 'fiMin'].forEach(k => (m[k] = num(m[k]) ?? 0)));
     n.phases.forEach(p => ['weight', 'navel', 'waist', 'bf'].forEach(k => (p[k] = num(p[k]) ?? 0)));
     return n;
   };
@@ -147,6 +147,7 @@ export default function Settings({ uid, settings, user, onSignOut }) {
               <Field label="Protein ≥ g"><N v={m.p} set={v => up(['modes', k, 'p'], v)} /></Field>
               <Field label="Fat ≤ g"><N v={m.fMax} set={v => up(['modes', k, 'fMax'], v)} /></Field>
               <Field label="Carbs ≤ g"><N v={m.cMax} set={v => up(['modes', k, 'cMax'], v)} /></Field>
+              <Field label="Fiber ≥ g"><N v={m.fiMin ?? 30} set={v => up(['modes', k, 'fiMin'], v)} /></Field>
             </div>
           </div>))}
       </div>
