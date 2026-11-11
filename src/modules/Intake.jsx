@@ -43,6 +43,16 @@ function MealEditor({ init, onSave, onCancel, label }) {
     amount: (base.amount || '').replace(/\d+(?:[.,]\d+)?/, m => String(r1(parseFloat(m.replace(',', '.')) * k))),
   });
   const set = k => e => setV({ ...v, [k]: e.target.value });
+  // Changing the amount (50 g -> 70 g) rescales all values from the original ones, as long as the unit is the same.
+  const NUM = /\d+(?:[.,]\d+)?/;
+  const setAmount = e => {
+    const amount = e.target.value, bn = NUM.exec(base.amount || ''), nn = NUM.exec(amount);
+    const same = bn && nn && (base.amount || '').replace(NUM, '').trim().toLowerCase() === amount.replace(NUM, '').trim().toLowerCase();
+    const k = same ? parseFloat(nn[0].replace(',', '.')) / parseFloat(bn[0].replace(',', '.')) : null;
+    if (!(k > 0)) return setV({ ...v, amount });
+    const sc = x => (x === '' ? '' : r1((num(x) || 0) * k));
+    setV({ ...v, amount, kcal: sc(base.kcal), p: sc(base.p), f: sc(base.f), c: sc(base.c), fi: sc(base.fi), su: sc(base.su) });
+  };
   const save = () => {
     const o = { name: v.name.trim() || init.name, amount: v.amount, p: num(v.p) || 0, f: num(v.f) || 0, c: num(v.c) || 0, kcal: num(v.kcal) || 0 };
     if (num(v.fi) != null) o.fi = num(v.fi); if (num(v.su) != null) o.su = num(v.su);
@@ -50,7 +60,7 @@ function MealEditor({ init, onSave, onCancel, label }) {
     onSave(o);
   };
   return <div style={{ padding: '8px 0' }}>
-    <div className="f2" style={{ marginBottom: 6 }}><input placeholder="Name" value={v.name} onChange={set('name')} /><input placeholder="Amount" value={v.amount} onChange={set('amount')} /></div>
+    <div className="f2" style={{ marginBottom: 6 }}><input placeholder="Name" value={v.name} onChange={set('name')} /><input placeholder="Amount" value={v.amount} onChange={setAmount} /></div>
     <div className="row" style={{ gap: 6, marginBottom: 6, flexWrap: 'wrap' }}><span className="dim" style={{ fontSize: 12 }}>Scale</span>
       {[0.5, 0.75, 1, 1.25, 1.5, 2].map(k => <button key={k} className="sm" onClick={() => scale(k)}>×{k}</button>)}</div>
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 6, marginBottom: 8 }}>
