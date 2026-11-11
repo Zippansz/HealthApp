@@ -33,6 +33,31 @@ function Meter({ label, val, min, max, unit = '' }) {
   );
 }
 
+// Small form for changing a meal (or a favorite before posting it). Scale buttons multiply all macros and the number in the amount.
+function MealEditor({ init, onSave, onCancel, label }) {
+  const [v, setV] = useState({ name: init.name || '', amount: init.amount || '', kcal: init.kcal ?? '', p: init.p ?? '', f: init.f ?? '', c: init.c ?? '' });
+  const [base] = useState(v);
+  const r1 = x => Math.round(x * 10) / 10;
+  const scale = k => setV({
+    ...v, kcal: r1((num(base.kcal) || 0) * k), p: r1((num(base.p) || 0) * k), f: r1((num(base.f) || 0) * k), c: r1((num(base.c) || 0) * k),
+    amount: (base.amount || '').replace(/\d+(?:[.,]\d+)?/, m => String(r1(parseFloat(m.replace(',', '.')) * k))),
+  });
+  const set = k => e => setV({ ...v, [k]: e.target.value });
+  const save = () => {
+    const o = { name: v.name.trim() || init.name, amount: v.amount, p: num(v.p) || 0, f: num(v.f) || 0, c: num(v.c) || 0, kcal: num(v.kcal) || 0 };
+    if (!o.kcal && (o.p || o.f || o.c)) o.kcal = Math.round(4 * o.p + 4 * o.c + 9 * o.f);
+    onSave(o);
+  };
+  return <div style={{ padding: '8px 0' }}>
+    <div className="f2" style={{ marginBottom: 6 }}><input placeholder="Name" value={v.name} onChange={set('name')} /><input placeholder="Amount" value={v.amount} onChange={set('amount')} /></div>
+    <div className="row" style={{ gap: 6, marginBottom: 6, flexWrap: 'wrap' }}><span className="dim" style={{ fontSize: 12 }}>Scale</span>
+      {[0.5, 0.75, 1, 1.25, 1.5, 2].map(k => <button key={k} className="sm" onClick={() => scale(k)}>×{k}</button>)}</div>
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 6, marginBottom: 8 }}>
+      {[['kcal', 'kcal'], ['p', 'P g'], ['f', 'F g'], ['c', 'C g']].map(([k, l]) => <input key={k} inputMode="decimal" placeholder={l} value={v[k]} onChange={set(k)} />)}</div>
+    <div className="row" style={{ gap: 8 }}><button className="pri" onClick={save}>{label}</button><button onClick={onCancel}>Cancel</button></div>
+  </div>;
+}
+
 export default function Intake({ uid, settings }) {
   const [date, setDate] = useState(todayStr());
   const since = date < addDays(todayStr(), -70) ? date : addDays(todayStr(), -70);
@@ -55,6 +80,8 @@ export default function Intake({ uid, settings }) {
     applyActions(uid, actions, { settings, todayMeals: dayMeals }).catch(e => setErr('Could not save: ' + e.message));
   };
   const [err, setErr] = useState('');
+  const [editId, setEditId] = useState(null);
+  const [draft, setDraft] = useState(null);
   const [manual, setManual] = useState({ name: '', amount: '', kcal: '', p: '', f: '', c: '' });
   const phase = phaseFor(settings.phases, date);
   const [modeKey, setModeKey] = useState('');
@@ -203,11 +230,13 @@ export default function Intake({ uid, settings }) {
       <div className="card">
         <h3 style={{ marginBottom: 6 }}>Meals · {date}</h3>
         {dayMeals.length === 0 && <div className="dim">Nothing logged{(() => { const i = imported.find(x => x.id === date); return i ? ` in the app. Imported daily total: ${Math.round(i.kcal)} kcal · P ${Math.round(i.p)} F ${Math.round(i.f)} C ${Math.round(i.c)}` : '.'; })()}</div>}
-        <table><tbody>{dayMeals.map(m => (
+        <table><tbody>{dayMeals.map(m => editId === m.id ? (
+          <tr key={m.id}><td colSpan={3}><MealEditor init={m} label="Save" onCancel={() => setEditId(null)} onSave={async o => { await put(uid, 'meals', m.id, o); setEditId(null); }} /></td></tr>
+        ) : (
           <tr key={m.id}>
             <td>{m.name}<div className="dim" style={{ fontSize: 12 }}>{m.amount} · P{Math.round(m.p)} F{Math.round(m.f)} C{Math.round(m.c)}</div></td>
             <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}><b>{Math.round(m.kcal)}</b> kcal</td>
-            <td style={{ whiteSpace: 'nowrap' }}><button className="sm" onClick={() => addFav(m)}>★</button> <button className="sm danger" onClick={() => remove(uid, 'meals', m.id)}>✕</button></td>
+            <td style={{ whiteSpace: 'nowrap' }}><button className="sm" onClick={() => setEditId(m.id)}>✎</button> <button className="sm" onClick={() => addFav(m)}>★</button> <button className="sm danger" onClick={() => remove(uid, 'meals', m.id)}>✕</button></td>
           </tr>))}</tbody></table>
         <details style={{ marginTop: 8 }}><summary>Add manually</summary>
           <div className="f2" style={{ marginBottom: 8 }}>
@@ -224,7 +253,10 @@ export default function Intake({ uid, settings }) {
       {(settings.favorites.length > 0 || frequent.length > 0) && (
         <div className="card">
           {settings.favorites.length > 0 && <><h3 style={{ marginBottom: 8 }}>Favorites</h3>
-            {settings.favorites.map(f => <span key={f.name} className="chip"><span onClick={() => quick(f)}>★ {f.name} · {f.amount || Math.round(f.kcal) + ' kcal'}</span><span onClick={() => window.confirm('Remove favorite "' + f.name + '"?') && saveSettings(uid, { favorites: settings.favorites.filter(x => x.name !== f.name) })} style={{ marginLeft: 10, padding: '0 4px', color: '#fca5a5' }}>✕</span></span>)}</>}
+            {draft && <div className="card" style={{ marginBottom: 10, background: '#0b1220' }}>
+              <div className="dim" style={{ fontSize: 12 }}>Adjust before posting</div>
+              <MealEditor key={draft.name} init={draft} label="Post" onCancel={() => setDraft(null)} onSave={async o => { await quick(o); setDraft(null); }} /></div>}
+            {settings.favorites.map(f => <span key={f.name} className="chip"><span onClick={() => setDraft(f)}>★ {f.name} · {f.amount || Math.round(f.kcal) + ' kcal'}</span><span onClick={() => window.confirm('Remove favorite "' + f.name + '"?') && saveSettings(uid, { favorites: settings.favorites.filter(x => x.name !== f.name) })} style={{ marginLeft: 10, padding: '0 4px', color: '#fca5a5' }}>✕</span></span>)}</>}
           {frequent.length > 0 && <><h3 style={{ margin: '8px 0' }}>Often eaten</h3>
             {frequent.map(f => <span key={f.name} className="chip" onClick={() => quick(f)}>+ {f.name} · {Math.round(f.kcal)}</span>)}</>}
         </div>
