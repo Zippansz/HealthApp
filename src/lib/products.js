@@ -50,10 +50,10 @@ export async function learnFromActions(uid, actions, products) {
     if (g) {
       const mult = { kg: 1000, g: 1, gram: 1, ml: 1, dl: 100, cl: 10, l: 1000 }[g[2].toLowerCase()];
       const grams = parseFloat(g[1].replace(',', '.')) * mult;
-      if (grams >= 10) doc = { ...base, per100: { kcal: a.kcal / grams * 100, p: a.p / grams * 100, f: a.f / grams * 100, c: a.c / grams * 100, ...(a.fi != null ? { fi: a.fi / grams * 100 } : {}), ...(a.su != null ? { su: a.su / grams * 100 } : {}) } };
+      if (grams >= 10) doc = { ...base, per100: { kcal: a.kcal / grams * 100, p: a.p / grams * 100, f: a.f / grams * 100, c: a.c / grams * 100, ...(a.fi != null ? { fi: a.fi / grams * 100 } : {}) } };
     } else if (q && parseFloat(q[1]) > 0 && parseFloat(q[1]) <= 20) {
       const n = parseFloat(q[1].replace(',', '.'));
-      doc = { ...base, perPiece: { kcal: a.kcal / n, p: a.p / n, f: a.f / n, c: a.c / n, ...(a.fi != null ? { fi: a.fi / n } : {}), ...(a.su != null ? { su: a.su / n } : {}) } };
+      doc = { ...base, perPiece: { kcal: a.kcal / n, p: a.p / n, f: a.f / n, c: a.c / n, ...(a.fi != null ? { fi: a.fi / n } : {}) } };
     }
     if (!doc) continue;
     const r1 = o => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, Math.round(v * 10) / 10]));
@@ -94,7 +94,7 @@ async function webLookup({ key, model, brand, product, original, country }) {
       tools: [{ google_search: {} }],
       contents: [{ role: 'user', parts: [{ text: `A user of a food-logging app, living in ${country}, wrote: "${original}". They mean the product "${brand} ${product}", but their wording may be imprecise or partly wrong (wrong fat %, translated or shortened names, English instead of Swedish, e.g. "low fat" for a product sold as "0% fett" or "light").
 Work out which real product they most likely mean: search the web for the ${country} version of the product (${country === 'Sweden' ? 'manufacturer pages and Swedish retailers such as arla.se, willys.se, ica.se, coop.se, mathem.se, or Open Food Facts' : `${country} retailers, the manufacturer's ${country} site, or Open Food Facts`}). The same brand often has different recipes and numbers in other countries, so never use a US/UK/foreign page for it, list the variants of that brand that exist, compare them with every clue in the user's wording (fat %, flavour, size, "mini", etc.) and pick the single most probable match. Do not simply pick the first hit and do not default to the lowest or highest fat version: pick the one that best fits ALL the clues. Then read its exact nutrition facts per 100 g (or per 100 ml for drinks), from the page itself.
-Reply with ONLY one JSON object, no other text: {"name":"full exact product name incl. fat %","brand":"brand","kcal":number,"protein":number,"fat":number,"carbs":number,"sugars":number or null,"fiber":number or null,"pack_g":number or null,"piece_g":number or null,"source":"url of the page used","why":"one short sentence: why this variant","alternatives":["other plausible variants"],"found":true or false}. Set found=false only if no real product fits.` }] }],
+Reply with ONLY one JSON object, no other text: {"name":"full exact product name incl. fat %","brand":"brand","kcal":number,"protein":number,"fat":number,"carbs":number,"fiber":number or null,"pack_g":number or null,"piece_g":number or null,"source":"url of the page used","why":"one short sentence: why this variant","alternatives":["other plausible variants"],"found":true or false}. Set found=false only if no real product fits.` }] }],
       generationConfig: { temperature: 0 } } });
     const m = /\{[\s\S]*\}/.exec(textOf(j)); if (!m) return null;
     const o = JSON.parse(m[0]);
@@ -103,7 +103,6 @@ Reply with ONLY one JSON object, no other text: {"name":"full exact product name
     const r = { kcal: n(o.kcal), p: n(o.protein), f: n(o.fat), c: n(o.carbs) };
     if (o.found === false || Object.values(r).some(v => v == null)) return null;
     if (n(o.fiber) != null) r.fi = n(o.fiber);
-    if (n(o.sugars) != null) r.su = n(o.sugars);
     // sanity: kcal should roughly match the macros, and be a believable food
     if (r.kcal < 5 || r.kcal > 900 || Math.abs(r.kcal - (4 * r.p + 4 * r.c + 9 * r.f)) > 0.2 * r.kcal + 12) return null;
     return { name: o.name || q, brand, per100: r, pack: n(o.pack_g), piece: n(o.piece_g), source: o.source || web[0] || '', why: typeof o.why === 'string' ? o.why : '' };
@@ -126,7 +125,7 @@ async function offLookup({ brand, product, country }) {
     const ok = ((await res.json()).products || []).filter(x => b.every(t => tokens(x.brands || '').map(stem).includes(t)) && x.nutriments?.['energy-kcal_100g'] > 0 && x.nutriments.proteins_100g != null)
       .sort((x, y) => score(y) - score(x));
     const x = ok[0]; if (!x || score(x) < 0.5) return null;
-    const n = x.nutriments, r = { kcal: n['energy-kcal_100g'], p: n.proteins_100g, f: n.fat_100g ?? 0, c: n.carbohydrates_100g ?? 0, ...(n.fiber_100g != null ? { fi: n.fiber_100g } : {}), ...(n.sugars_100g != null ? { su: n.sugars_100g } : {}) };
+    const n = x.nutriments, r = { kcal: n['energy-kcal_100g'], p: n.proteins_100g, f: n.fat_100g ?? 0, c: n.carbohydrates_100g ?? 0, ...(n.fiber_100g != null ? { fi: n.fiber_100g } : {}) };
     if (Math.abs(r.kcal - (4 * r.p + 4 * r.c + 9 * r.f)) > 0.2 * r.kcal + 12) return null;
     return { name: x.product_name || `${brand} ${product}`, brand, per100: r, pack: null, piece: null, source: `https://world.openfoodfacts.org/product/${x.code}` };
   } catch { return null; }
@@ -156,4 +155,4 @@ export async function resolveProducts({ uid, key, model, text, products, enabled
   return { ref: fmtRefs([...refs.values()]), used, failed };
 }
 
-const fmtRefs = list => list.map(p => `- ${p.name}: ${p.per100 ? `per 100 g: ${Math.round(p.per100.kcal)} kcal, P ${p.per100.p}, F ${p.per100.f}, C ${p.per100.c}${p.per100.su != null ? `, sugars ${p.per100.su}` : ''}${p.per100.fi != null ? `, fiber ${p.per100.fi}` : ''}` : ''}${p.perPiece ? `per 1 piece: ${Math.round(p.perPiece.kcal)} kcal, P ${p.perPiece.p}, F ${p.perPiece.f}, C ${p.perPiece.c}${p.perPiece.su != null ? `, sugars ${p.perPiece.su}` : ''}${p.perPiece.fi != null ? `, fiber ${p.perPiece.fi}` : ''}` : ''}${p.pack ? `; whole pack ${p.pack} g` : ''}${p.piece ? `; one piece ${p.piece} g` : ''}`).join('\n');
+const fmtRefs = list => list.map(p => `- ${p.name}: ${p.per100 ? `per 100 g: ${Math.round(p.per100.kcal)} kcal, P ${p.per100.p}, F ${p.per100.f}, C ${p.per100.c}${p.per100.fi != null ? `, fiber ${p.per100.fi}` : ''}` : ''}${p.perPiece ? `per 1 piece: ${Math.round(p.perPiece.kcal)} kcal, P ${p.perPiece.p}, F ${p.perPiece.f}, C ${p.perPiece.c}${p.perPiece.fi != null ? `, fiber ${p.perPiece.fi}` : ''}` : ''}${p.pack ? `; whole pack ${p.pack} g` : ''}${p.piece ? `; one piece ${p.piece} g` : ''}`).join('\n');

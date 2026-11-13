@@ -35,11 +35,11 @@ function Meter({ label, val, min, max, unit = '' }) {
 
 // Small form for changing a meal (or a favorite before posting it). Scale buttons multiply all macros and the number in the amount.
 function MealEditor({ init, onSave, onCancel, label }) {
-  const [v, setV] = useState({ name: init.name || '', amount: init.amount || '', kcal: init.kcal ?? '', p: init.p ?? '', f: init.f ?? '', c: init.c ?? '', fi: init.fi ?? '', su: init.su ?? '' });
+  const [v, setV] = useState({ name: init.name || '', amount: init.amount || '', kcal: init.kcal ?? '', p: init.p ?? '', f: init.f ?? '', c: init.c ?? '', fi: init.fi ?? '' });
   const [base] = useState(v);
   const r1 = x => Math.round(x * 10) / 10;
   const scale = k => setV({
-    ...v, kcal: r1((num(base.kcal) || 0) * k), p: r1((num(base.p) || 0) * k), f: r1((num(base.f) || 0) * k), c: r1((num(base.c) || 0) * k), fi: base.fi === '' ? '' : r1((num(base.fi) || 0) * k), su: base.su === '' ? '' : r1((num(base.su) || 0) * k),
+    ...v, kcal: r1((num(base.kcal) || 0) * k), p: r1((num(base.p) || 0) * k), f: r1((num(base.f) || 0) * k), c: r1((num(base.c) || 0) * k), fi: base.fi === '' ? '' : r1((num(base.fi) || 0) * k),
     amount: (base.amount || '').replace(/\d+(?:[.,]\d+)?/, m => String(r1(parseFloat(m.replace(',', '.')) * k))),
   });
   const set = k => e => setV({ ...v, [k]: e.target.value });
@@ -51,11 +51,11 @@ function MealEditor({ init, onSave, onCancel, label }) {
     const k = same ? parseFloat(nn[0].replace(',', '.')) / parseFloat(bn[0].replace(',', '.')) : null;
     if (!(k > 0)) return setV({ ...v, amount });
     const sc = x => (x === '' ? '' : r1((num(x) || 0) * k));
-    setV({ ...v, amount, kcal: sc(base.kcal), p: sc(base.p), f: sc(base.f), c: sc(base.c), fi: sc(base.fi), su: sc(base.su) });
+    setV({ ...v, amount, kcal: sc(base.kcal), p: sc(base.p), f: sc(base.f), c: sc(base.c), fi: sc(base.fi) });
   };
   const save = () => {
     const o = { name: v.name.trim() || init.name, amount: v.amount, p: num(v.p) || 0, f: num(v.f) || 0, c: num(v.c) || 0, kcal: num(v.kcal) || 0 };
-    if (num(v.fi) != null) o.fi = num(v.fi); if (num(v.su) != null) o.su = num(v.su);
+    if (num(v.fi) != null) o.fi = num(v.fi);
     if (!o.kcal && (o.p || o.f || o.c)) o.kcal = Math.round(4 * o.p + 4 * o.c + 9 * o.f);
     onSave(o);
   };
@@ -66,7 +66,7 @@ function MealEditor({ init, onSave, onCancel, label }) {
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 6, marginBottom: 8 }}>
       {[['kcal', 'kcal'], ['p', 'P g'], ['f', 'F g'], ['c', 'C g']].map(([k, l]) => <input key={k} inputMode="decimal" placeholder={l} value={v[k]} onChange={set(k)} />)}</div>
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 6, marginBottom: 8 }}>
-      {[['fi', 'Fiber g'], ['su', 'Sugars g']].map(([k, l]) => <input key={k} inputMode="decimal" placeholder={l} value={v[k]} onChange={set(k)} />)}</div>
+      {[['fi', 'Fiber g']].map(([k, l]) => <input key={k} inputMode="decimal" placeholder={l} value={v[k]} onChange={set(k)} />)}</div>
     <div className="row" style={{ gap: 8 }}><button className="pri" onClick={save}>{label}</button><button onClick={onCancel}>Cancel</button></div>
   </div>;
 }
@@ -94,7 +94,7 @@ export default function Intake({ uid, settings }) {
   };
   const [err, setErr] = useState('');
   const [editId, setEditId] = useState(null);
-  const [draft, setDraft] = useState(null);
+  const [editFav, setEditFav] = useState(null);
   const [manual, setManual] = useState({ name: '', amount: '', kcal: '', p: '', f: '', c: '' });
   const phase = phaseFor(settings.phases, date);
   const [modeKey, setModeKey] = useState('');
@@ -102,7 +102,7 @@ export default function Intake({ uid, settings }) {
 
   const dayMeals = useMemo(() => meals.filter(m => m.date === date).sort((a, b) => (a.ts || 0) - (b.ts || 0)), [meals, date]);
   const act = acts.find(a => a.id === date) || {};
-  const tot = dayMeals.reduce((t, m) => ({ p: t.p + (m.p || 0), f: t.f + (m.f || 0), c: t.c + (m.c || 0), kcal: t.kcal + (m.kcal || 0), fi: t.fi + (m.fi || 0), su: t.su + (m.su || 0) }), { p: 0, f: 0, c: 0, kcal: 0, fi: 0, su: 0 });
+  const tot = dayMeals.reduce((t, m) => ({ p: t.p + (m.p || 0), f: t.f + (m.f || 0), c: t.c + (m.c || 0), kcal: t.kcal + (m.kcal || 0), fi: t.fi + (m.fi || 0) }), { p: 0, f: 0, c: 0, kcal: 0, fi: 0 });
   const burn = expenditure(settings, act);
   const balance = tot.kcal - burn;
 
@@ -177,13 +177,13 @@ export default function Intake({ uid, settings }) {
     } catch (e) { setErr(e.message); }
     setBusy(false); setStep('');
   };
-  const quick = f => put(uid, 'meals', crypto.randomUUID(), { date, ts: Date.now(), name: f.name, amount: f.amount || '', p: f.p || 0, f: f.f || 0, c: f.c || 0, kcal: f.kcal || 0, ...(f.fi != null ? { fi: f.fi } : {}), ...(f.su != null ? { su: f.su } : {}) });
+  const quick = f => put(uid, 'meals', crypto.randomUUID(), { date, ts: Date.now(), name: f.name, amount: f.amount || '', p: f.p || 0, f: f.f || 0, c: f.c || 0, kcal: f.kcal || 0, ...(f.fi != null ? { fi: f.fi } : {}) });
   const addManual = async () => {
     if (!manual.name.trim()) return;
     await quick({ name: manual.name.trim(), amount: manual.amount, kcal: num(manual.kcal) || 0, p: num(manual.p) || 0, f: num(manual.f) || 0, c: num(manual.c) || 0 });
     setManual({ name: '', amount: '', kcal: '', p: '', f: '', c: '' });
   };
-  const addFav = m => saveSettings(uid, { favorites: [...settings.favorites.filter(f => f.name !== m.name), { name: m.name, amount: m.amount, p: m.p, f: m.f, c: m.c, kcal: m.kcal, ...(m.fi != null ? { fi: m.fi } : {}), ...(m.su != null ? { su: m.su } : {}) }] });
+  const addFav = m => saveSettings(uid, { favorites: [...settings.favorites.filter(f => f.name !== m.name), { name: m.name, amount: m.amount, p: m.p, f: m.f, c: m.c, kcal: m.kcal, ...(m.fi != null ? { fi: m.fi } : {}) }] });
 
   return (
     <>
@@ -208,7 +208,6 @@ export default function Intake({ uid, settings }) {
         <Meter label="Fat" val={tot.f} max={mode.fMax} unit=" g" />
         <Meter label="Carbs" val={tot.c} max={mode.cMax} unit=" g" />
         <Meter label="Fiber" val={tot.fi} min={mode.fiMin ?? 30} unit=" g" />
-        {tot.su > 0 && <div className="dim" style={{ fontSize: 12, marginTop: -4, marginBottom: 8 }}>Sugars {Math.round(tot.su)} g (included in carbs)</div>}
         <div className="row sp mute" style={{ fontSize: 13 }}>
           <span>Burn ≈ {Math.round(burn)} kcal ({settings.baseTdee} base{act.steps ? ` + ${Math.round(burn - settings.baseTdee - (act.kcal || 0))} steps` : ''}{act.kcal ? ` + ${act.kcal} exercise` : ''}){act.steps ? ` · ${act.steps} steps` : ' · no steps logged (Training tab)'}</span>
           <b className={balance > 0 ? 'a' : 'g'}>{balance > 0 ? '+' : ''}{Math.round(balance)} kcal</b>
@@ -268,10 +267,11 @@ export default function Intake({ uid, settings }) {
       {(settings.favorites.length > 0 || frequent.length > 0) && (
         <div className="card">
           {settings.favorites.length > 0 && <><h3 style={{ marginBottom: 8 }}>Favorites</h3>
-            {draft && <div className="card" style={{ marginBottom: 10, background: '#0b1220' }}>
-              <div className="dim" style={{ fontSize: 12 }}>Adjust before posting</div>
-              <MealEditor key={draft.name} init={draft} label="Post" onCancel={() => setDraft(null)} onSave={async o => { await quick(o); setDraft(null); }} /></div>}
-            {settings.favorites.map(f => <span key={f.name} className="chip"><span onClick={() => setDraft(f)}>★ {f.name} · {f.amount || Math.round(f.kcal) + ' kcal'}</span><span onClick={() => window.confirm('Remove favorite "' + f.name + '"?') && saveSettings(uid, { favorites: settings.favorites.filter(x => x.name !== f.name) })} style={{ marginLeft: 10, padding: '0 4px', color: '#fca5a5' }}>✕</span></span>)}</>}
+            {editFav && <div className="card" style={{ marginBottom: 10, background: '#0b1220' }}>
+              <div className="dim" style={{ fontSize: 12 }}>Edit favorite (only changes the saved favorite)</div>
+              <MealEditor key={editFav.name} init={editFav} label="Save favorite" onCancel={() => setEditFav(null)}
+                onSave={async o => { saveSettings(uid, { favorites: settings.favorites.map(x => (x.name === editFav.name ? o : x)) }); setEditFav(null); }} /></div>}
+            {settings.favorites.map(f => <span key={f.name} className="chip"><span onClick={() => quick(f)}>★ {f.name} · {f.amount || Math.round(f.kcal) + ' kcal'}</span><span onClick={() => setEditFav(f)} style={{ marginLeft: 10, padding: '0 4px' }}>✎</span><span onClick={() => window.confirm('Remove favorite "' + f.name + '"?') && saveSettings(uid, { favorites: settings.favorites.filter(x => x.name !== f.name) })} style={{ marginLeft: 10, padding: '0 4px', color: '#fca5a5' }}>✕</span></span>)}</>}
           {frequent.length > 0 && <><h3 style={{ margin: '8px 0' }}>Often eaten</h3>
             {frequent.map(f => <span key={f.name} className="chip" onClick={() => quick(f)}>+ {f.name} · {Math.round(f.kcal)}</span>)}</>}
         </div>

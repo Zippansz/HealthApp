@@ -11,11 +11,11 @@ const SCHEMA = {
           date: { type: 'STRING', nullable: true },
           name: { type: 'STRING', nullable: true },
           amount: { type: 'STRING', nullable: true },
-          p: { type: 'NUMBER', nullable: true }, f: { type: 'NUMBER', nullable: true }, c: { type: 'NUMBER', nullable: true }, kcal: { type: 'NUMBER', nullable: true }, fi: { type: 'NUMBER', nullable: true }, su: { type: 'NUMBER', nullable: true },
+          p: { type: 'NUMBER', nullable: true }, f: { type: 'NUMBER', nullable: true }, c: { type: 'NUMBER', nullable: true }, kcal: { type: 'NUMBER', nullable: true }, fi: { type: 'NUMBER', nullable: true },
           kcalBurned: { type: 'NUMBER', nullable: true }, steps: { type: 'NUMBER', nullable: true },
           weight: { type: 'NUMBER', nullable: true }, waist: { type: 'NUMBER', nullable: true }, navel: { type: 'NUMBER', nullable: true },
         },
-        required: ['type', 'name', 'amount', 'p', 'f', 'c', 'kcal', 'fi', 'su'],
+        required: ['type', 'name', 'amount', 'p', 'f', 'c', 'kcal', 'fi'],
       },
     },
   },
@@ -26,7 +26,7 @@ export async function askGemini({ key, model, text, today, context, images = [],
   if (!key) throw new Error('No Gemini key yet. Add it in Settings.');
   const system = `You are the logging engine of a personal health app. Today is ${today}.
 Turn the user's text into actions. The user lives in ${country}: assume ${country} brands, shops, product versions, portion sizes and recipes, and metric units. For packaged products use the values of the ${country} version (the same brand often has different recipes and numbers in other countries). For plain foods prefer ${country === 'Sweden' ? "the Swedish Food Agency's food database (Livsmedelsverket, livsmedelsdatabasen)" : 'the national food composition database'} over US figures. Estimate nutrition realistically for the stated amounts (Swedish and English food names are both common).
-- add_meal: ALWAYS fill name, amount (as written, e.g. "2 st" or "150 g"), protein p, fat f, carbs c (grams), dietary fiber fi (grams), sugars su (grams, part of the carbs) AND kcal, all realistic and non-zero for real food. kcal must be about 4*p + 4*c + 9*f. Never return 0 kcal for food. One action per food item. Use date only if the user names a day other than today (YYYY-MM-DD).
+- add_meal: ALWAYS fill name, amount (as written, e.g. "2 st" or "150 g"), protein p, fat f, carbs c (grams), dietary fiber fi (grams) AND kcal, all realistic and non-zero for real food. kcal must be about 4*p + 4*c + 9*f. Never return 0 kcal for food. One action per food item. Use date only if the user names a day other than today (YYYY-MM-DD).
 - remove_meal: name must exactly match an entry from today's list given below.
 - activity: kcalBurned (exercise calories) and/or steps for the date.
 - measurement: weight (kg), waist (cm), navel (cm) when the user reports body measurements.
@@ -54,7 +54,7 @@ ${reference ? `\nVERIFIED PRODUCT DATA (looked up online or from the user's save
   (parsed.actions || []).forEach(a => {
     if (a.type === 'add_meal' || a.type === 'add_favorite') {
       ['p', 'f', 'c', 'kcal'].forEach(k => { if (a[k] == null) a[k] = 0; });
-      if (a.fi == null) delete a.fi; if (a.su == null) delete a.su;
+      if (a.fi == null) delete a.fi;
       if (!(a.kcal > 0) && (a.p || a.f || a.c)) a.kcal = Math.round(4 * a.p + 4 * a.c + 9 * a.f);
     }
   });

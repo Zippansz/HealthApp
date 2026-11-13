@@ -14,13 +14,13 @@ const N = ({ v, set }) => <input inputMode="decimal" value={v ?? ''} onChange={e
 function ProductRow({ p, uid }) {
   const [edit, setEdit] = useState(false);
   const base = p.per100 || p.perPiece; const unit = p.per100 ? '/100 g' : '/piece';
-  const [v, setV] = useState({ kcal: base.kcal, p: base.p, f: base.f, c: base.c, fi: base.fi ?? '', su: base.su ?? '' });
-  const save = async () => { const o = Object.fromEntries(Object.entries(v).filter(([k, x]) => !['fi', 'su'].includes(k) || num(x) != null).map(([k, x]) => [k, num(x) ?? 0])); await put(uid, 'products', p.id, p.per100 ? { per100: o, learned: false } : { perPiece: o, learned: false }); setEdit(false); };
+  const [v, setV] = useState({ kcal: base.kcal, p: base.p, f: base.f, c: base.c, fi: base.fi ?? '' });
+  const save = async () => { const o = Object.fromEntries(Object.entries(v).filter(([k, x]) => k !== 'fi' || num(x) != null).map(([k, x]) => [k, num(x) ?? 0])); await put(uid, 'products', p.id, p.per100 ? { per100: o, learned: false } : { perPiece: o, learned: false }); setEdit(false); };
   return <div style={{ padding: '4px 0', fontSize: 13, borderTop: '1px solid #1e293b' }}>
     <div className="row sp"><span>{p.name}{p.type === 'generic' ? <span className="dim"> · plain food{p.learned ? ' (from your logs)' : ''}</span> : ''}<br />
-      <span className="dim">{Math.round(base.kcal)} kcal · P {base.p} · F {base.f} · C {base.c}{base.fi != null ? ` · Fi ${base.fi}` : ''}{base.su != null ? ` · Su ${base.su}` : ''} {unit}{p.pack ? ` · pack ${p.pack} g` : ''}{p.source ? <> · <a href={p.source} target="_blank" rel="noreferrer" style={{ color: 'var(--blue)' }}>source</a></> : ''}</span></span>
+      <span className="dim">{Math.round(base.kcal)} kcal · P {base.p} · F {base.f} · C {base.c}{base.fi != null ? ` · Fi ${base.fi}` : ''} {unit}{p.pack ? ` · pack ${p.pack} g` : ''}{p.source ? <> · <a href={p.source} target="_blank" rel="noreferrer" style={{ color: 'var(--blue)' }}>source</a></> : ''}</span></span>
       <span><button className="sm" onClick={() => setEdit(!edit)}>Edit</button> <button className="sm" onClick={() => remove(uid, 'products', p.id)}>×</button></span></div>
-    {edit && <div style={{ marginTop: 6, display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 6 }}>{[['kcal', 'kcal'], ['p', 'P'], ['f', 'F'], ['c', 'C'], ['fi', 'Fi'], ['su', 'Su']].map(([k, l]) => <input key={k} inputMode="decimal" placeholder={l} value={v[k]} onChange={e => setV({ ...v, [k]: e.target.value })} />)}<button className="ok" onClick={save}>Save</button></div>}
+    {edit && <div style={{ marginTop: 6, display: 'grid', gridTemplateColumns: 'repeat(6,1fr)', gap: 6 }}>{[['kcal', 'kcal'], ['p', 'P'], ['f', 'F'], ['c', 'C'], ['fi', 'Fi']].map(([k, l]) => <input key={k} inputMode="decimal" placeholder={l} value={v[k]} onChange={e => setV({ ...v, [k]: e.target.value })} />)}<button className="ok" onClick={save}>Save</button></div>}
   </div>;
 }
 
