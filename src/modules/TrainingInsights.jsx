@@ -72,6 +72,12 @@ function Goals({ uid, settings, workouts, today }) {
     const next = T.syncGoals(goals, off, hist, today);
     if (JSON.stringify(next) !== JSON.stringify(goals)) save(next);
   }, [hist, JSON.stringify(goals), off.length]);
+  const [editI, setEditI] = useState(null), [ekg, setEkg] = useState(''), [ereps, setEreps] = useState('');
+  const startEdit = i => { setEditI(i); setEkg(String(goals[i].kg || '')); setEreps(String(goals[i].reps)); };
+  const saveEdit = () => {
+    const reps = Math.min(T.MAX_REPS, Math.round(+ereps)); if (!(reps > 0)) return;
+    save(goals.map((g, j) => (j === editI ? { name: g.name, kg: +ekg || 0, reps } : g))); setEditI(null);
+  };
   const remove = i => saveSettings(uid, { goals: goals.filter((_, j) => j !== i), goalsOff: [...off, goals[i].name] });
   const add = () => {
     const n = hist.has(name) ? name : null; if (!n || !(+reps > 0)) return;
@@ -96,7 +102,11 @@ function Goals({ uid, settings, workouts, today }) {
         const p = T.goalProgress(g, hist, today);
         const color = p.done ? 'var(--green)' : 'var(--blue)';
         return <div key={i} style={{ padding: '8px 0', borderBottom: '1px solid #1e293b' }}>
-          <div className="row sp"><b style={{ fontSize: 14 }}>{g.name}</b><button className="sm" onClick={() => remove(i)}>×</button></div>
+          <div className="row sp"><b style={{ fontSize: 14 }}>{g.name}</b><span><button className="sm" onClick={() => (editI === i ? setEditI(null) : startEdit(i))}>✎</button> <button className="sm" onClick={() => remove(i)}>×</button></span></div>
+          {editI === i && <div className="f3" style={{ margin: '6px 0' }}>
+            <input inputMode="decimal" placeholder="kg (0 = bodyweight)" value={ekg} onChange={e => setEkg(e.target.value)} />
+            <input inputMode="numeric" placeholder="Reps (max 30)" value={ereps} onChange={e => setEreps(e.target.value)} />
+            <button className="pri" onClick={saveEdit}>Save</button></div>}
           <div className="row sp" style={{ fontSize: 13, margin: '2px 0 4px' }}>
             <span>Target {setTxt(g)}{p.done ? ' ✓' : ''}</span><span className="mute">{Math.round(p.pct * 100)}%</span></div>
           <Bar v={p.pct} color={color} />
