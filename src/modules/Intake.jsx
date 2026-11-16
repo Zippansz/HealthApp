@@ -19,13 +19,16 @@ async function shrink(file) {
   } finally { URL.revokeObjectURL(url); }
 }
 
-function Meter({ label, val, min, max, unit = '' }) {
+function Meter({ label, val, min, max, unit = '', band = false, bulk = false }) {
   const target = max ?? min;
   const pct = Math.min(100, (val / (target || 1)) * 100);
   const over = max != null && val > max;
   // Fat-type meters (a ceiling only): below half = blue, 50-90% green, last 10% orange, over = red.
   // Goal-type meters (a minimum only: protein, carbs when bulking, fiber): orange until reached, then green.
-  const color = max != null && min == null
+  // band meters (protein, carbs): orange under 90% of the goal, green 90-110%, then orange (red when bulking)
+  const color = band
+    ? (val < 0.9 * target ? 'var(--amber)' : val <= 1.1 * target ? 'var(--green)' : bulk ? 'var(--red)' : 'var(--amber)')
+    : max != null && min == null
     ? (val > max ? 'var(--red)' : val >= 0.9 * max ? 'var(--amber)' : val >= 0.5 * max ? 'var(--green)' : 'var(--blue)')
     : max == null && min != null
       ? (val >= min ? 'var(--green)' : 'var(--amber)')
@@ -211,9 +214,9 @@ export default function Intake({ uid, settings }) {
           </select>
         </div>
         <Meter label="Calories" val={tot.kcal} min={mode.kcalMin} max={mode.kcalMax} unit=" kcal" />
-        <Meter label="Protein" val={tot.p} min={mode.p} unit=" g" />
+        <Meter label="Protein" val={tot.p} min={mode.p} unit=" g" band bulk={carbsMin} />
         <Meter label="Fat" val={tot.f} max={mode.fMax} unit=" g" />
-        <Meter label="Carbs" val={tot.c} {...(carbsMin ? { min: mode.cMax } : { max: mode.cMax })} unit=" g" />
+        <Meter label="Carbs" val={tot.c} {...(carbsMin ? { min: mode.cMax } : { max: mode.cMax })} unit=" g" band bulk={carbsMin} />
         <Meter label="Fiber" val={tot.fi} min={mode.fiMin ?? 30} unit=" g" />
         <div className="row sp mute" style={{ fontSize: 13 }}>
           <span>Burn ≈ {Math.round(burn)} kcal ({settings.baseTdee} base{act.steps ? ` + ${Math.round(burn - settings.baseTdee - (act.kcal || 0))} steps` : ''}{act.kcal ? ` + ${act.kcal} exercise` : ''}){act.steps ? ` · ${act.steps} steps` : ' · no steps logged (Training tab)'}</span>
