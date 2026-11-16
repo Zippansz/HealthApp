@@ -23,7 +23,13 @@ function Meter({ label, val, min, max, unit = '' }) {
   const target = max ?? min;
   const pct = Math.min(100, (val / (target || 1)) * 100);
   const over = max != null && val > max;
-  const color = over ? 'var(--red)' : min != null && val >= min ? 'var(--green)' : 'var(--blue)';
+  // Fat-type meters (a ceiling only): below half = blue, 50-80% green, last 20% orange, over = red.
+  // Goal-type meters (a minimum only: protein, carbs when bulking, fiber): orange until reached, then green.
+  const color = max != null && min == null
+    ? (val > max ? 'var(--red)' : val >= 0.8 * max ? 'var(--amber)' : val >= 0.5 * max ? 'var(--green)' : 'var(--blue)')
+    : max == null && min != null
+      ? (val >= min ? 'var(--green)' : 'var(--amber)')
+      : over ? 'var(--red)' : min != null && val >= min ? 'var(--green)' : 'var(--blue)';
   return (
     <div style={{ marginBottom: 10 }}>
       <div className="row sp" style={{ fontSize: 13 }}><span className="mute">{label}</span>
@@ -99,6 +105,7 @@ export default function Intake({ uid, settings }) {
   const phase = phaseFor(settings.phases, date);
   const [modeKey, setModeKey] = useState('');
   const mode = settings.modes[modeKey || phase?.mode] || settings.modes.maintenance;
+  const carbsMin = (modeKey || phase?.mode) === 'bulking';   // when bulking, the carbs number is a minimum
 
   const dayMeals = useMemo(() => meals.filter(m => m.date === date).sort((a, b) => (a.ts || 0) - (b.ts || 0)), [meals, date]);
   const act = acts.find(a => a.id === date) || {};
@@ -206,7 +213,7 @@ export default function Intake({ uid, settings }) {
         <Meter label="Calories" val={tot.kcal} min={mode.kcalMin} max={mode.kcalMax} unit=" kcal" />
         <Meter label="Protein" val={tot.p} min={mode.p} unit=" g" />
         <Meter label="Fat" val={tot.f} max={mode.fMax} unit=" g" />
-        <Meter label="Carbs" val={tot.c} max={mode.cMax} unit=" g" />
+        <Meter label="Carbs" val={tot.c} {...(carbsMin ? { min: mode.cMax } : { max: mode.cMax })} unit=" g" />
         <Meter label="Fiber" val={tot.fi} min={mode.fiMin ?? 30} unit=" g" />
         <div className="row sp mute" style={{ fontSize: 13 }}>
           <span>Burn ≈ {Math.round(burn)} kcal ({settings.baseTdee} base{act.steps ? ` + ${Math.round(burn - settings.baseTdee - (act.kcal || 0))} steps` : ''}{act.kcal ? ` + ${act.kcal} exercise` : ''}){act.steps ? ` · ${act.steps} steps` : ' · no steps logged (Training tab)'}</span>

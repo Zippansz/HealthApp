@@ -146,7 +146,7 @@ export default function Settings({ uid, settings, user, onSignOut }) {
               <Field label="kcal max"><N v={m.kcalMax} set={v => up(['modes', k, 'kcalMax'], v)} /></Field>
               <Field label="Protein ≥ g"><N v={m.p} set={v => up(['modes', k, 'p'], v)} /></Field>
               <Field label="Fat ≤ g"><N v={m.fMax} set={v => up(['modes', k, 'fMax'], v)} /></Field>
-              <Field label="Carbs ≤ g"><N v={m.cMax} set={v => up(['modes', k, 'cMax'], v)} /></Field>
+              <Field label={k === 'bulking' ? 'Carbs ≥ g' : 'Carbs ≤ g'}><N v={m.cMax} set={v => up(['modes', k, 'cMax'], v)} /></Field>
               <Field label="Fiber ≥ g"><N v={m.fiMin ?? 30} set={v => up(['modes', k, 'fiMin'], v)} /></Field>
             </div>
           </div>))}

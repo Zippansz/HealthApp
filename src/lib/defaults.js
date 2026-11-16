@@ -14,7 +14,7 @@ export const DEFAULTS = {
   modes: {
     cutting: { label: 'Cutting', p: 160, kcalMin: 1700, kcalMax: 1900, fMax: 90, cMax: 120 },
     maintenance: { label: 'Maintenance', p: 160, kcalMin: 2200, kcalMax: 2400, fMax: 100, cMax: 250 },
-    bulking: { label: 'Bulking', p: 180, kcalMin: 2700, kcalMax: 3000, fMax: 110, cMax: 400 },
+    bulking: { label: 'Bulking', p: 180, kcalMin: 2700, kcalMax: 3000, fMax: 85, cMax: 300 },
   },
   phases: [
     { name: 'Maintenance Reset', start: '2026-05-09', end: '2026-05-18', mode: 'maintenance', weight: 78, navel: 89.5, waist: 86, bf: 19.5 },
