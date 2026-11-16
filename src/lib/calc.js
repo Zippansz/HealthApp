@@ -59,3 +59,11 @@ export const expenditure = (settings, act = {}) =>
   settings.baseTdee
   + (act.steps ? Math.max(0, act.steps - (settings.stepsInBase ?? 6800)) * (settings.kcalPerStep ?? 0.04) : 0)
   + (act.kcal || 0);
+
+// Carbs are derived, not set: protein goal (4 kcal/g) and fat ceiling (9 kcal/g) form the base,
+// and carbs fill what is left up to the calorie min and max. Rounded to 5 g.
+export const carbRange = m => {
+  const base = 4 * (m.p || 0) + 9 * (m.fMax || 0);
+  const g = kcal => Math.max(0, Math.round((kcal - base) / 4 / 5) * 5);
+  return { min: g(m.kcalMin || 0), max: g(m.kcalMax || 0) };
+};

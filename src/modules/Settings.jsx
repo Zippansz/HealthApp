@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { saveSettings, getAll, putMany, useCollection, remove, put } from '../lib/db';
 import { DEFAULTS } from '../lib/defaults';
-import { downloadFile, todayStr, num } from '../lib/calc';
+import { downloadFile, todayStr, num, carbRange } from '../lib/calc';
 import { parseCSV, toCSV } from '../lib/csv';
 import { mergeByDate } from '../lib/hevy';
 import { TAPE } from '../lib/tape';
@@ -146,7 +146,7 @@ export default function Settings({ uid, settings, user, onSignOut }) {
               <Field label="kcal max"><N v={m.kcalMax} set={v => up(['modes', k, 'kcalMax'], v)} /></Field>
               <Field label="Protein ≥ g"><N v={m.p} set={v => up(['modes', k, 'p'], v)} /></Field>
               <Field label="Fat ≤ g"><N v={m.fMax} set={v => up(['modes', k, 'fMax'], v)} /></Field>
-              <Field label={k === 'bulking' ? 'Carbs ≥ g' : 'Carbs ≤ g'}><N v={m.cMax} set={v => up(['modes', k, 'cMax'], v)} /></Field>
+              <Field label="Carbs g (auto)"><input readOnly value={(r => `${r.min}–${r.max}`)(carbRange(m))} style={{ opacity: 0.7 }} /></Field>
               <Field label="Fiber ≥ g"><N v={m.fiMin ?? 30} set={v => up(['modes', k, 'fiMin'], v)} /></Field>
             </div>
           </div>))}

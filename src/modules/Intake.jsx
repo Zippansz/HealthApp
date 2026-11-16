@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { useCollection, put, remove, saveSettings } from '../lib/db';
-import { todayStr, addDays, num, phaseFor, expenditure, daysBetween } from '../lib/calc';
+import { todayStr, addDays, num, phaseFor, expenditure, daysBetween, carbRange } from '../lib/calc';
 import { askGemini } from '../lib/gemini';
 import { resolveProducts, learnFromActions, needsReasoning } from '../lib/products';
 import { applyActions, describe } from '../lib/actions';
@@ -19,9 +19,21 @@ async function shrink(file) {
   } finally { URL.revokeObjectURL(url); }
 }
 
-function Meter({ label, val, min, max, unit = '', band = false, bulk = false }) {
+function Meter({ label, val, min, max, unit = '', band = false, bulk = false, under = 'var(--blue)' }) {
   const target = max ?? min;
   const pct = Math.min(100, (val / (target || 1)) * 100);
+  // Range meters (calories, carbs) are a guide, not exact: green from 5% under the min to 4% over the max,
+  // orange up to 10% over, red beyond that.
+  if (min != null && max != null && !band) {
+    const color = val < 0.95 * min ? under : val <= 1.04 * max ? 'var(--green)' : val <= 1.1 * max ? 'var(--amber)' : 'var(--red)';
+    return (
+      <div style={{ marginBottom: 10 }}>
+        <div className="row sp" style={{ fontSize: 13 }}><span className="mute">{label}</span>
+          <span><b>{Math.round(val)}</b><span className="dim"> / {min}–{max}{unit}</span></span></div>
+        <div className="bar"><i style={{ width: pct + '%', background: color }} /></div>
+      </div>
+    );
+  }
   const over = max != null && val > max;
   // Fat-type meters (a ceiling only): below half = blue, 50-90% green, last 10% orange, over = red.
   // Goal-type meters (a minimum only: protein, carbs when bulking, fiber): orange until reached, then green.
@@ -216,7 +228,7 @@ export default function Intake({ uid, settings }) {
         <Meter label="Calories" val={tot.kcal} min={mode.kcalMin} max={mode.kcalMax} unit=" kcal" />
         <Meter label="Protein" val={tot.p} min={mode.p} unit=" g" band bulk={carbsMin} />
         <Meter label="Fat" val={tot.f} max={mode.fMax} unit=" g" />
-        <Meter label="Carbs" val={tot.c} {...(carbsMin ? { min: mode.cMax } : { max: mode.cMax })} unit=" g" band bulk={carbsMin} />
+        <Meter label="Carbs" val={tot.c} {...carbRange(mode)} unit=" g" under="var(--amber)" />
         <Meter label="Fiber" val={tot.fi} min={mode.fiMin ?? 30} unit=" g" />
         <div className="row sp mute" style={{ fontSize: 13 }}>
           <span>Burn ≈ {Math.round(burn)} kcal ({settings.baseTdee} base{act.steps ? ` + ${Math.round(burn - settings.baseTdee - (act.kcal || 0))} steps` : ''}{act.kcal ? ` + ${act.kcal} exercise` : ''}){act.steps ? ` · ${act.steps} steps` : ' · no steps logged (Training tab)'}</span>
