@@ -23,10 +23,10 @@ function Meter({ label, val, min, max, unit = '' }) {
   const target = max ?? min;
   const pct = Math.min(100, (val / (target || 1)) * 100);
   const over = max != null && val > max;
-  // Fat-type meters (a ceiling only): below half = blue, 50-80% green, last 20% orange, over = red.
+  // Fat-type meters (a ceiling only): below half = blue, 50-90% green, last 10% orange, over = red.
   // Goal-type meters (a minimum only: protein, carbs when bulking, fiber): orange until reached, then green.
   const color = max != null && min == null
-    ? (val > max ? 'var(--red)' : val >= 0.8 * max ? 'var(--amber)' : val >= 0.5 * max ? 'var(--green)' : 'var(--blue)')
+    ? (val > max ? 'var(--red)' : val >= 0.9 * max ? 'var(--amber)' : val >= 0.5 * max ? 'var(--green)' : 'var(--blue)')
     : max == null && min != null
       ? (val >= min ? 'var(--green)' : 'var(--amber)')
       : over ? 'var(--red)' : min != null && val >= min ? 'var(--green)' : 'var(--blue)';
