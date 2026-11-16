@@ -102,7 +102,10 @@ export default function Settings({ uid, settings, user, onSignOut }) {
 
   return (
     <>
-      <h2 style={{ marginBottom: 12 }}>Settings</h2>
+      <h2 style={{ marginBottom: 4 }}>Settings</h2>
+      <div className="dim" style={{ fontSize: 12, marginBottom: 12 }}>
+        Nano OS Health v{__APP_VERSION__} · build {__BUILD_SHA__} · published {new Date(__BUILD_TIME__).toLocaleString('sv-SE', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Europe/Stockholm' })}
+      </div>
 
       <div className="card">
         <div className="row sp"><div><div className="lbl">Signed in</div>{user.email}</div><button onClick={onSignOut}>Sign out</button></div>
@@ -214,10 +217,6 @@ export default function Settings({ uid, settings, user, onSignOut }) {
         <div className="dim" style={{ fontSize: 13, margin: '6px 0 10px' }}>One file with everything: measurements, every meal with timestamp, activity, workouts and targets. Give it to Claude for deeper analysis. Your Gemini key is never included.</div>
         <div className="row">{['meals', 'measurements', 'activity', 'sets'].map(k => <button key={k} className="sm" onClick={() => csv(k)}>{k}.csv</button>)}</div>
         {msg && <div className="msg">{msg}</div>}
-      </div>
-      <div className="dim" style={{ fontSize: 12, textAlign: 'center', margin: '16px 0 8px' }}>
-        Nano OS Health v{__APP_VERSION__} · build {__BUILD_SHA__}<br />
-        Published {new Date(__BUILD_TIME__).toLocaleString('sv-SE', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Europe/Stockholm' })}
       </div>
     </>
   );
