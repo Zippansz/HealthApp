@@ -19,7 +19,7 @@ async function shrink(file) {
   } finally { URL.revokeObjectURL(url); }
 }
 
-function Meter({ label, val, min, max, unit = '', band = false, bulk = false, under = 'var(--blue)' }) {
+function Meter({ label, val, min, max, unit = '', band = false, under = 'var(--blue)' }) {
   const target = max ?? min;
   const pct = Math.min(100, (val / (target || 1)) * 100);
   // Range meters (calories, carbs) are a guide, not exact: green from 5% under the min to 4% over the max,
@@ -36,10 +36,10 @@ function Meter({ label, val, min, max, unit = '', band = false, bulk = false, un
   }
   const over = max != null && val > max;
   // Fat-type meters (a ceiling only): below half = blue, 50-90% green, last 10% orange, over = red.
-  // Goal-type meters (a minimum only: protein, carbs when bulking, fiber): orange until reached, then green.
-  // band meters (protein, carbs): orange under 90% of the goal, green 90-110%, then orange (red when bulking)
+  // Goal-type meters (a minimum only: fiber): orange until reached, then green.
+  // band meters (protein): orange under 90% of the goal, green 90-125%, orange above (more is not harmful, just not useful)
   const color = band
-    ? (val < 0.9 * target ? 'var(--amber)' : val <= 1.1 * target ? 'var(--green)' : bulk ? 'var(--red)' : 'var(--amber)')
+    ? (val < 0.9 * target ? 'var(--amber)' : val <= 1.25 * target ? 'var(--green)' : 'var(--amber)')
     : max != null && min == null
     ? (val > max ? 'var(--red)' : val >= 0.9 * max ? 'var(--amber)' : val >= 0.5 * max ? 'var(--green)' : 'var(--blue)')
     : max == null && min != null
@@ -120,7 +120,6 @@ export default function Intake({ uid, settings }) {
   const phase = phaseFor(settings.phases, date);
   const [modeKey, setModeKey] = useState('');
   const mode = settings.modes[modeKey || phase?.mode] || settings.modes.maintenance;
-  const carbsMin = (modeKey || phase?.mode) === 'bulking';   // when bulking, the carbs number is a minimum
 
   const dayMeals = useMemo(() => meals.filter(m => m.date === date).sort((a, b) => (a.ts || 0) - (b.ts || 0)), [meals, date]);
   const act = acts.find(a => a.id === date) || {};
@@ -226,7 +225,7 @@ export default function Intake({ uid, settings }) {
           </select>
         </div>
         <Meter label="Calories" val={tot.kcal} min={mode.kcalMin} max={mode.kcalMax} unit=" kcal" />
-        <Meter label="Protein" val={tot.p} min={mode.p} unit=" g" band bulk={carbsMin} />
+        <Meter label="Protein" val={tot.p} min={mode.p} unit=" g" band />
         <Meter label="Fat" val={tot.f} max={mode.fMax} unit=" g" />
         <Meter label="Carbs" val={tot.c} {...carbRange(mode)} unit=" g" under="var(--amber)" />
         <Meter label="Fiber" val={tot.fi} min={mode.fiMin ?? 30} unit=" g" />
