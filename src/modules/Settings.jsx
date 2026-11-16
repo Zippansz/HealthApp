@@ -187,7 +187,7 @@ export default function Settings({ uid, settings, user, onSignOut }) {
 
       <div className="card">
         <h3 style={{ marginBottom: 4 }}>Muscle priority</h3>
-        <div className="dim" style={{ fontSize: 12, marginBottom: 6 }}>Top = most important. This sets the order of "This week" on the Training tab. Saves immediately.</div>
+        <div className="dim" style={{ fontSize: 12, marginBottom: 6 }}>Top = most important. This sets the order of "Last 7 days" on the Training tab. Saves immediately.</div>
         {(() => { const ord = priorityOrder(settings.musclePriority).filter(m => m !== 'Other'); const mv = (i, d) => { const a = [...ord]; [a[i], a[i + d]] = [a[i + d], a[i]]; saveSettings(uid, { musclePriority: a }); };
           return ord.map((m, i) => <div key={m} className="row sp" style={{ padding: '3px 0' }}><span>{i + 1}. {m}</span>
             <span><button className="sm" disabled={i === 0} onClick={() => mv(i, -1)}>↑</button> <button className="sm" disabled={i === ord.length - 1} onClick={() => mv(i, 1)}>↓</button></span></div>); })()}

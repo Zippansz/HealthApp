@@ -89,8 +89,9 @@ export function lastTrained(workouts) {
   return last;
 }
 
+// Rolling window: the last 7 days (today included) vs the 7 days before that.
 export function weekSummary(workouts, today, bwAt) {
-  const start = mondayOf(today), prevStart = addDays(start, -7), prevEnd = addDays(start, -1);
+  const start = addDays(today, -6), prevStart = addDays(today, -13), prevEnd = addDays(today, -7);
   const inWeek = workouts.filter(w => w.date >= start && w.date <= today);
   const setsOf = w => w.exercises.reduce((a, e) => a + hardSets(e).length, 0);
   return {
@@ -129,7 +130,7 @@ export function practice(workouts, today) {
     if (!bwShare(name) || daysBetween(sessions.at(-1).date, today) > 120) continue;
     const per = {};
     sessions.forEach(s => { per[s.date] = Math.max(per[s.date] || 0, ...s.sets.map(x => x.reps)); });
-    const start = mondayOf(today), prevStart = addDays(start, -7);
+    const start = addDays(today, -6), prevStart = addDays(today, -13);
     const sum = (a, b) => Math.max(0, ...Object.entries(per).filter(([d]) => d >= a && d <= b).map(([, v]) => v));
     let streak = 0, d = per[today] ? today : addDays(today, -1);
     while (per[d]) { streak++; d = addDays(d, -1); }

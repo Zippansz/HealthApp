@@ -18,20 +18,20 @@ function Week({ workouts, bwAt, today, priority }) {
   const neg = useMemo(() => T.neglected(workouts, today), [workouts, today]);
   const last = useMemo(() => T.lastTrained(workouts), [workouts]);
   const names = priorityOrder(priority).filter(m => m !== 'Other' && (w.prev[m] || w.now[m] || last[m]));
-  const wk = daysBetween(w.start, today) + 1;
+  const wk = 7;
   return (
     <div className="card">
-      <div className="row sp"><h3>This week</h3><span className="mute" style={{ fontSize: 13 }}>day {wk} of 7</span></div>
+      <div className="row sp"><h3>Last 7 days</h3><span className="mute" style={{ fontSize: 13 }}>vs the 7 days before</span></div>
       <div className="grid" style={{ margin: '8px 0' }}>
-        <div className="card stat" style={{ marginBottom: 0 }}><div className="lbl">Sessions</div><div className="v">{w.days}</div><div className="s">last week {w.prevDays}</div></div>
-        <div className="card stat" style={{ marginBottom: 0 }}><div className="lbl">Hard sets</div><div className="v">{w.sets}</div><div className="s">last week {w.prevSets}</div></div>
+        <div className="card stat" style={{ marginBottom: 0 }}><div className="lbl">Sessions</div><div className="v">{w.days}</div><div className="s">prev 7 days {w.prevDays}</div></div>
+        <div className="card stat" style={{ marginBottom: 0 }}><div className="lbl">Hard sets</div><div className="v">{w.sets}</div><div className="s">prev 7 days {w.prevSets}</div></div>
       </div>
       <div className="dim" style={{ fontSize: 12 }}>Sorted by your priority (change in Settings).</div>
       {names.map(m => {
         const n = w.now[m] || 0, p = w.prev[m] || 0, d = last[m] ? daysBetween(last[m], today) : null;
         return <div key={m} style={{ margin: '6px 0' }}>
           <div className="row sp" style={{ fontSize: 13 }}><span>{m}</span>
-            <span className="mute">{n ? kgFmt(n) : d != null && d <= wk - 1 ? '' : 'not yet'} <span className="dim">/ {p ? kgFmt(p) : '–'} last wk</span></span></div>
+            <span className="mute">{n ? kgFmt(n) : d != null && d <= wk - 1 ? '' : 'not yet'} <span className="dim">/ {p ? kgFmt(p) : '–'} prev 7d</span></span></div>
           <Bar v={p ? n / p : n ? 1 : 0} color={n >= p && n ? 'var(--green)' : 'var(--blue)'} />
         </div>;
       })}
@@ -137,7 +137,7 @@ function Practice({ workouts, today }) {
       {list.map(p => {
         const max = Math.max(...p.daily, 1);
         return <div key={p.name} style={{ padding: '6px 0' }}>
-          <div className="row sp"><b style={{ fontSize: 14 }}>{p.name}</b><span className="mute" style={{ fontSize: 13 }}>best set {p.thisWeek} this week <span className="dim">/ {p.lastWeek} last</span></span></div>
+          <div className="row sp"><b style={{ fontSize: 14 }}>{p.name}</b><span className="mute" style={{ fontSize: 13 }}>best set {p.thisWeek} last 7 days <span className="dim">/ {p.lastWeek} prev</span></span></div>
           <svg viewBox="0 0 140 28" width="100%" height="28" style={{ display: 'block', margin: '4px 0' }}>
             {p.daily.map((v, i) => <rect key={i} x={i * 10 + 1} y={28 - (v / max) * 26} width="8" height={Math.max(v ? (v / max) * 26 : 1, 1)} rx="1.5" fill={v ? 'var(--green)' : '#1e293b'} />)}
           </svg>
