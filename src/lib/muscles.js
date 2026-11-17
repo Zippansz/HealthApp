@@ -100,3 +100,7 @@ export function muscleStats(workouts, bwAt = () => null) {
     };
   }).sort((a, b) => MUSCLE_ORDER.indexOf(a.name) - MUSCLE_ORDER.indexOf(b.name));
 }
+
+// Default hours of rest before a muscle is ready again (bigger muscles / heavy compound lifts need longer). Editable in Settings.
+export const RECOVERY_H = { Chest: 60, Back: 60, Shoulders: 48, Biceps: 48, Triceps: 48, Forearms: 24, Quads: 72, 'Hamstrings & glutes': 72, Calves: 24, Core: 24, Neck: 24 };
+export const recoveryHours = (saved, m) => Number(saved?.[m]) > 0 ? Number(saved[m]) : (RECOVERY_H[m] ?? 48);

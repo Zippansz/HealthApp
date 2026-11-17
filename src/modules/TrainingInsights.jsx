@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { saveSettings } from '../lib/db';
 import { todayStr, addDays, daysBetween } from '../lib/calc';
 import * as T from '../lib/trainstats';
-import { priorityOrder } from '../lib/muscles';
+import { priorityOrder, recoveryHours } from '../lib/muscles';
 
 const kgFmt = v => (v >= 1000 ? (v / 1000).toFixed(1) + ' t' : Math.round(v) + ' kg');
 const pct = d => (d == null ? '–' : (d > 0 ? '+' : '') + (d * 100).toFixed(0) + '%');
@@ -13,10 +13,24 @@ const Bar = ({ v, color = 'var(--green)' }) => (
   </div>
 );
 
-function Week({ workouts, bwAt, today, priority }) {
+// Thin recovery bar: fills up from the last session until the muscle is ready again.
+function Cooldown({ c, now }) {
+  const left = c.readyAt - now;
+  if (left <= 0) return <div className="row sp" style={{ fontSize: 12, marginTop: 3 }}><span style={{ color: 'var(--green)' }}>✓ Ready</span></div>;
+  const h = Math.ceil(left / 3600e3);
+  const v = (now - c.from) / (c.readyAt - c.from || 1);
+  return <div style={{ marginTop: 3 }}>
+    <div style={{ height: 4, background: '#1e293b', borderRadius: 2, overflow: 'hidden' }}><div style={{ width: Math.max(2, Math.min(1, v) * 100) + '%', height: '100%', background: 'var(--amber)' }} /></div>
+    <div style={{ fontSize: 12, color: 'var(--amber)', marginTop: 2 }}>ready in {h >= 24 ? `${Math.floor(h / 24)} d ${h % 24} h` : `${h} h`}</div>
+  </div>;
+}
+
+function Week({ workouts, bwAt, today, priority, recovery }) {
   const w = useMemo(() => T.weekSummary(workouts, today, bwAt), [workouts, today, bwAt(today)]);
   const neg = useMemo(() => T.neglected(workouts, today), [workouts, today]);
   const last = useMemo(() => T.lastTrained(workouts), [workouts]);
+  const cool = useMemo(() => T.cooldowns(workouts, m => recoveryHours(recovery, m)), [workouts, recovery]);
+  const now = Date.now();
   const names = priorityOrder(priority).filter(m => m !== 'Other' && (w.prev[m] || w.now[m] || last[m]));
   const wk = 7;
   return (
@@ -26,13 +40,14 @@ function Week({ workouts, bwAt, today, priority }) {
         <div className="card stat" style={{ marginBottom: 0 }}><div className="lbl">Sessions</div><div className="v">{w.days}</div><div className="s">prev 7 days {w.prevDays}</div></div>
         <div className="card stat" style={{ marginBottom: 0 }}><div className="lbl">Hard sets</div><div className="v">{w.sets}</div><div className="s">prev 7 days {w.prevSets}</div></div>
       </div>
-      <div className="dim" style={{ fontSize: 12 }}>Sorted by your priority (change in Settings).</div>
+      <div className="dim" style={{ fontSize: 12 }}>Sorted by your priority. Top bar: volume vs prev 7 days. Thin bar: recovery (times editable in Settings).</div>
       {names.map(m => {
         const n = w.now[m] || 0, p = w.prev[m] || 0, d = last[m] ? daysBetween(last[m], today) : null;
         return <div key={m} style={{ margin: '6px 0' }}>
-          <div className="row sp" style={{ fontSize: 13 }}><span>{m}</span>
+          <div className="row sp" style={{ fontSize: 13 }}><span>{m} <span className="dim">· {recoveryHours(recovery, m)} h</span></span>
             <span className="mute">{n ? kgFmt(n) : d != null && d <= wk - 1 ? '' : 'not yet'} <span className="dim">/ {p ? kgFmt(p) : '–'} prev 7d</span></span></div>
           <Bar v={p ? n / p : n ? 1 : 0} color={n >= p && n ? 'var(--green)' : 'var(--blue)'} />
+          {cool[m] && <Cooldown c={cool[m]} now={now} />}
         </div>;
       })}
       {neg.length > 0 && <div style={{ marginTop: 10, fontSize: 13 }}>
@@ -221,7 +236,7 @@ export default function TrainingInsights({ uid, settings, workouts, bwAt, meals,
   if (!workouts.length) return null;
   return (
     <>
-      <Week workouts={workouts} bwAt={bwAt} today={today} priority={settings.musclePriority} />
+      <Week workouts={workouts} bwAt={bwAt} today={today} priority={settings.musclePriority} recovery={settings.recoveryHours} />
       <Goals uid={uid} settings={settings} workouts={workouts} today={today} />
       <Heat workouts={workouts} today={today} />
       <Records workouts={workouts} today={today} onPick={onPick} />

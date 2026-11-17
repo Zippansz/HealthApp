@@ -89,6 +89,24 @@ export function lastTrained(workouts) {
   return last;
 }
 
+// Cooldown per muscle: when it is ready again. Secondary work needs half the rest (same 50% as for volume).
+// Time = end of that day's training (or its start). Returns { muscle: { from, readyAt } } in ms; the latest readyAt wins.
+export function cooldowns(workouts, hoursOf) {
+  const res = {};
+  for (const w of workouts) {
+    const t = new Date(w.end || w.start || w.date + 'T18:00').getTime();
+    if (!Number.isFinite(t)) continue;
+    for (const e of w.exercises) {
+      if (!hardSets(e).length) continue;
+      for (const [m, wt] of muscleShares(e.name)) {
+        const readyAt = t + hoursOf(m) * wt * 3600e3;
+        if (!res[m] || readyAt > res[m].readyAt) res[m] = { from: t, readyAt };
+      }
+    }
+  }
+  return res;
+}
+
 // Rolling window: the last 7 days (today included) vs the 7 days before that.
 export function weekSummary(workouts, today, bwAt) {
   const start = addDays(today, -6), prevStart = addDays(today, -13), prevEnd = addDays(today, -7);
