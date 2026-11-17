@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { useCollection, put, remove, saveSettings } from '../lib/db';
-import { todayStr, addDays, num, phaseFor, expenditure, daysBetween, carbRange } from '../lib/calc';
+import { todayStr, addDays, num, phaseFor, expenditure, daysBetween, carbRange, normAmount } from '../lib/calc';
 import { askGemini } from '../lib/gemini';
 import { resolveProducts, learnFromActions, needsReasoning } from '../lib/products';
 import { applyActions, describe } from '../lib/actions';
@@ -56,7 +56,7 @@ function Meter({ label, val, min, max, unit = '', band = false, under = 'var(--b
 
 // Small form for changing a meal (or a favorite before posting it). Scale buttons multiply all macros and the number in the amount.
 function MealEditor({ init, onSave, onCancel, label }) {
-  const [v, setV] = useState({ name: init.name || '', amount: init.amount || '', kcal: init.kcal ?? '', p: init.p ?? '', f: init.f ?? '', c: init.c ?? '', fi: init.fi ?? '' });
+  const [v, setV] = useState({ name: init.name || '', amount: normAmount(init.amount), kcal: init.kcal ?? '', p: init.p ?? '', f: init.f ?? '', c: init.c ?? '', fi: init.fi ?? '' });
   const [base] = useState(v);
   const r1 = x => Math.round(x * 10) / 10;
   const scale = k => setV({
@@ -75,7 +75,7 @@ function MealEditor({ init, onSave, onCancel, label }) {
     setV({ ...v, amount, kcal: sc(base.kcal), p: sc(base.p), f: sc(base.f), c: sc(base.c), fi: sc(base.fi) });
   };
   const save = () => {
-    const o = { name: v.name.trim() || init.name, amount: v.amount, p: num(v.p) || 0, f: num(v.f) || 0, c: num(v.c) || 0, kcal: num(v.kcal) || 0 };
+    const o = { name: v.name.trim() || init.name, amount: normAmount(v.amount), p: num(v.p) || 0, f: num(v.f) || 0, c: num(v.c) || 0, kcal: num(v.kcal) || 0 };
     if (num(v.fi) != null) o.fi = num(v.fi);
     if (!o.kcal && (o.p || o.f || o.c)) o.kcal = Math.round(4 * o.p + 4 * o.c + 9 * o.f);
     onSave(o);
@@ -198,13 +198,13 @@ export default function Intake({ uid, settings }) {
     } catch (e) { setErr(e.message); }
     setBusy(false); setStep('');
   };
-  const quick = f => put(uid, 'meals', crypto.randomUUID(), { date, ts: Date.now(), name: f.name, amount: f.amount || '', p: f.p || 0, f: f.f || 0, c: f.c || 0, kcal: f.kcal || 0, ...(f.fi != null ? { fi: f.fi } : {}) });
+  const quick = f => put(uid, 'meals', crypto.randomUUID(), { date, ts: Date.now(), name: f.name, amount: normAmount(f.amount), p: f.p || 0, f: f.f || 0, c: f.c || 0, kcal: f.kcal || 0, ...(f.fi != null ? { fi: f.fi } : {}) });
   const addManual = async () => {
     if (!manual.name.trim()) return;
     await quick({ name: manual.name.trim(), amount: manual.amount, kcal: num(manual.kcal) || 0, p: num(manual.p) || 0, f: num(manual.f) || 0, c: num(manual.c) || 0 });
     setManual({ name: '', amount: '', kcal: '', p: '', f: '', c: '' });
   };
-  const addFav = m => saveSettings(uid, { favorites: [...settings.favorites.filter(f => f.name !== m.name), { name: m.name, amount: m.amount, p: m.p, f: m.f, c: m.c, kcal: m.kcal, ...(m.fi != null ? { fi: m.fi } : {}) }] });
+  const addFav = m => saveSettings(uid, { favorites: [...settings.favorites.filter(f => f.name !== m.name), { name: m.name, amount: normAmount(m.amount), p: m.p, f: m.f, c: m.c, kcal: m.kcal, ...(m.fi != null ? { fi: m.fi } : {}) }] });
 
   return (
     <>
@@ -269,7 +269,7 @@ export default function Intake({ uid, settings }) {
           <tr key={m.id}><td colSpan={3}><MealEditor init={m} label="Save" onCancel={() => setEditId(null)} onSave={async o => { await put(uid, 'meals', m.id, o); setEditId(null); }} /></td></tr>
         ) : (
           <tr key={m.id}>
-            <td>{m.name}<div className="dim" style={{ fontSize: 12 }}>{m.amount} · P{Math.round(m.p)} F{Math.round(m.f)} C{Math.round(m.c)}{m.fi != null ? ` · Fi${Math.round(m.fi)}` : ''}</div></td>
+            <td>{m.name}<div className="dim" style={{ fontSize: 12 }}>{normAmount(m.amount)} · P{Math.round(m.p)} F{Math.round(m.f)} C{Math.round(m.c)}{m.fi != null ? ` · Fi${Math.round(m.fi)}` : ''}</div></td>
             <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}><b>{Math.round(m.kcal)}</b> kcal</td>
             <td style={{ whiteSpace: 'nowrap' }}><button className="sm" onClick={() => setEditId(m.id)}>✎</button> <button className="sm" onClick={() => addFav(m)}>★</button> <button className="sm danger" onClick={() => remove(uid, 'meals', m.id)}>✕</button></td>
           </tr>))}</tbody></table>
@@ -292,7 +292,7 @@ export default function Intake({ uid, settings }) {
               <div className="dim" style={{ fontSize: 12 }}>Edit favorite (only changes the saved favorite)</div>
               <MealEditor key={editFav.name} init={editFav} label="Save favorite" onCancel={() => setEditFav(null)}
                 onSave={async o => { saveSettings(uid, { favorites: settings.favorites.map(x => (x.name === editFav.name ? o : x)) }); setEditFav(null); }} /></div>}
-            {settings.favorites.map(f => <span key={f.name} className="chip"><span onClick={() => quick(f)}>★ {f.name} · {f.amount || Math.round(f.kcal) + ' kcal'}</span><span onClick={() => setEditFav(f)} style={{ marginLeft: 10, padding: '0 4px' }}>✎</span><span onClick={() => window.confirm('Remove favorite "' + f.name + '"?') && saveSettings(uid, { favorites: settings.favorites.filter(x => x.name !== f.name) })} style={{ marginLeft: 10, padding: '0 4px', color: '#fca5a5' }}>✕</span></span>)}</>}
+            {settings.favorites.map(f => <span key={f.name} className="chip"><span onClick={() => quick(f)}>★ {f.name} · {normAmount(f.amount) || Math.round(f.kcal) + ' kcal'}</span><span onClick={() => setEditFav(f)} style={{ marginLeft: 10, padding: '0 4px' }}>✎</span><span onClick={() => window.confirm('Remove favorite "' + f.name + '"?') && saveSettings(uid, { favorites: settings.favorites.filter(x => x.name !== f.name) })} style={{ marginLeft: 10, padding: '0 4px', color: '#fca5a5' }}>✕</span></span>)}</>}
           {frequent.length > 0 && <><h3 style={{ margin: '8px 0' }}>Often eaten</h3>
             {frequent.map(f => <span key={f.name} className="chip" onClick={() => quick(f)}>+ {f.name} · {Math.round(f.kcal)}</span>)}</>}
         </div>

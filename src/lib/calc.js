@@ -67,3 +67,6 @@ export const carbRange = m => {
   const g = kcal => Math.max(0, Math.round((kcal - base) / 4 / 5) * 5);
   return { min: g(m.kcalMin || 0), max: g(m.kcalMax || 0) };
 };
+
+// Amounts are always written without a space before weight/volume units: "5 g" -> "5g", "2,5 DL" -> "2.5dl".
+export const normAmount = s => (s || '').replace(/(\d+(?:[.,]\d+)?)\s*(kg|mg|g|ml|cl|dl|l)\b/gi, (_, n, u) => n.replace(',', '.') + u.toLowerCase());
