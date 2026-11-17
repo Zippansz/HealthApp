@@ -17,6 +17,37 @@ const RULES = [
   [/chest supported|\brow\b|pull ?up|chin up|pulldown|dead hang|pullover|shrug/i, 'Back'],
   [/bench press|chest|fly|push up|crossover|pec/i, 'Chest'],
 ];
+// Secondary muscles (worked less, count at half the volume). Hevy's export has no muscle data, so this table is built by exercise name.
+// First match wins; the primary muscle is never repeated as a secondary.
+export const SECONDARY_SHARE = 0.5;
+const SECONDARY = [
+  [/neck|straight arm/i, []],
+  [/leg curl/i, ['Calves']],
+  [/face pull|reverse fly|rear delt/i, ['Back']],
+  [/bench dip|\bdip\b/i, ['Chest', 'Shoulders']],
+  [/bench press|push ?up/i, ['Triceps', 'Shoulders']],
+  [/fly|crossover|pec/i, ['Shoulders']],
+  [/overhead press|shoulder press|arnold|seated overhead/i, ['Triceps']],
+  [/overhead tricep/i, []],
+  [/upright row/i, ['Back']],
+  [/bicep.*wrist/i, ['Biceps']],
+  [/reverse curl/i, ['Biceps']],
+  [/zottman/i, ['Forearms']],
+  [/hammer|preacher|ez bar|concentration|spider|incline curl|bicep curl|behind the back curl|curl/i, ['Forearms']],
+  [/dead hang/i, ['Forearms']],
+  [/rdl to row/i, ['Back']],
+  [/\brow\b/i, ['Biceps']],
+  [/pull ?up|chin up|pulldown/i, ['Biceps']],
+  [/pullover/i, ['Chest', 'Triceps']],
+  [/clean and jerk/i, ['Back', 'Quads']],
+  [/deadlift/i, ['Back', 'Quads']],
+  [/romanian|rdl|good morning/i, ['Back']],
+  [/back extension|hyperextension|superman/i, ['Hamstrings & glutes']],
+  [/squat|leg press|lunge/i, ['Hamstrings & glutes']],
+];
+export const secondaryOf = name => { const p = muscleOf(name); return ((SECONDARY.find(([re]) => re.test(name)) || [null, []])[1]).filter(m => m !== p); };
+// [muscle, weight] pairs for one exercise: the primary at 1, each secondary at 0.5
+export const muscleShares = name => [[muscleOf(name), 1], ...secondaryOf(name).map(m => [m, SECONDARY_SHARE])];
 export const muscleOf = name => (RULES.find(([re]) => re.test(name)) || [null, 'Other'])[1];
 export const priorityOrder = saved => {
   const keep = (saved || []).filter(m => MUSCLE_ORDER.includes(m));
@@ -41,8 +72,11 @@ export function muscleStats(workouts, bwAt = () => null) {
       const g = (groups[m] ||= { name: m, weeks: Array(WEEKS).fill(0), last: null, ex: {} });
       const bw = (bwAt(w.date) || 0) * bwShare(e.name);
       const vol = sets.reduce((a, x) => a + ((x.kg || 0) + bw) * x.reps, 0);   // kg x reps (+ share of body weight for pull-ups etc.)
-      g.weeks[Math.floor(age / 7)] += vol;
-      if (!g.last || w.date > g.last) g.last = w.date;
+      for (const [mm, wt] of muscleShares(e.name)) {   // primary counts in full, secondary muscles at half
+        const gg = (groups[mm] ||= { name: mm, weeks: Array(WEEKS).fill(0), last: null, ex: {} });
+        gg.weeks[Math.floor(age / 7)] += vol * wt;
+        if (!gg.last || w.date > gg.last) gg.last = w.date;
+      }
       const weighted = sets.some(s => s.kg > 0);
       const metric = weighted ? Math.max(...sets.map(s => e1rm(s.kg, s.reps))) : Math.max(...sets.map(s => s.reps));
       const x = (g.ex[e.name] ||= { name: e.name, weighted, recent: 0, prior: 0, unit: weighted ? 'kg 1RM' : 'reps' });

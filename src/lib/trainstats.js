@@ -1,5 +1,5 @@
 import { addDays, daysBetween } from './calc';
-import { muscleOf, bwShare, MUSCLE_ORDER } from './muscles';
+import { muscleShares, bwShare, MUSCLE_ORDER } from './muscles';
 
 export const MAX_REPS = 30;
 const hardSets = e => e.sets.filter(s => s.type !== 'warmup' && s.reps > 0);
@@ -73,8 +73,8 @@ export function volumeByMuscle(workouts, from, to, bwAt = () => null) {
     for (const e of w.exercises) {
       const sets = hardSets(e); if (!sets.length) continue;
       const bw = (bwAt(w.date) || 0) * bwShare(e.name);
-      const m = muscleOf(e.name);
-      v[m] = (v[m] || 0) + sets.reduce((a, s) => a + ((s.kg || 0) + bw) * s.reps, 0);
+      const vol = sets.reduce((a, s) => a + ((s.kg || 0) + bw) * s.reps, 0);
+      for (const [m, wt] of muscleShares(e.name)) v[m] = (v[m] || 0) + vol * wt;
     }
   }
   return v;
@@ -84,7 +84,7 @@ export function lastTrained(workouts) {
   const last = {};
   for (const w of workouts) for (const e of w.exercises) {
     if (!hardSets(e).length) continue;
-    const m = muscleOf(e.name); if (!last[m] || w.date > last[m]) last[m] = w.date;
+    for (const [m] of muscleShares(e.name)) if (!last[m] || w.date > last[m]) last[m] = w.date;
   }
   return last;
 }
