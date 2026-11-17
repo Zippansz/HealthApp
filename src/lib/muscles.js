@@ -45,10 +45,14 @@ const SECONDARY = [
   [/back extension|hyperextension|superman/i, ['Hamstrings & glutes']],
   [/squat|leg press|lunge/i, ['Hamstrings & glutes']],
 ];
-export const secondaryOf = name => { const p = muscleOf(name); return ((SECONDARY.find(([re]) => re.test(name)) || [null, []])[1]).filter(m => m !== p); };
+// Muscles you or the AI set for exercises the rules don't know (stored in your account, loaded by the Training tab).
+let CUSTOM = new Map();
+export const setCustomMuscles = list => { CUSTOM = new Map((list || []).map(x => [x.name, x])); };
+export const isKnownExercise = name => CUSTOM.has(name) || RULES.some(([re]) => re.test(name));
+export const secondaryOf = name => { const p = muscleOf(name); if (CUSTOM.has(name)) return (CUSTOM.get(name).secondary || []).filter(m => m !== p); return ((SECONDARY.find(([re]) => re.test(name)) || [null, []])[1]).filter(m => m !== p); };
 // [muscle, weight] pairs for one exercise: the primary at 1, each secondary at 0.5
 export const muscleShares = name => [[muscleOf(name), 1], ...secondaryOf(name).map(m => [m, SECONDARY_SHARE])];
-export const muscleOf = name => (RULES.find(([re]) => re.test(name)) || [null, 'Other'])[1];
+export const muscleOf = name => CUSTOM.get(name)?.primary || (RULES.find(([re]) => re.test(name)) || [null, 'Other'])[1];
 export const priorityOrder = saved => {
   const keep = (saved || []).filter(m => MUSCLE_ORDER.includes(m));
   return [...keep, ...MUSCLE_ORDER.filter(m => !keep.includes(m))];

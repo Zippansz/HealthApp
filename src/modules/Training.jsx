@@ -4,6 +4,8 @@ import { useCollection, putMany, put } from '../lib/db';
 import { parseHevy, parseHevyText, mergeByDate } from '../lib/hevy';
 import { e1rm, fmt, withMA, todayStr, addDays, num, expenditure } from '../lib/calc';
 import MuscleDash from './MuscleDash';
+import { setCustomMuscles, isKnownExercise } from '../lib/muscles';
+import { classifyExercises } from '../lib/exmap';
 import TrainingInsights, { WorkoutDetail } from './TrainingInsights';
 
 // Per-exercise stats from all workouts.
@@ -67,7 +69,18 @@ export default function Training({ uid, settings }) {
     } catch (err) { setPmsg('Could not save: ' + err.message); }
   };
 
-  const norm = useMemo(() => mergeByDate(workouts), [workouts]);
+  const exMap = useCollection(uid, 'exercises');
+  // custom muscles must be set before anything is computed from the workouts
+  const norm = useMemo(() => { setCustomMuscles(exMap); return mergeByDate(workouts); }, [workouts, exMap]);
+  // exercises the name rules don't know get classified once by the AI and saved
+  const asked = React.useRef(new Set());
+  React.useEffect(() => {
+    if (!settings.geminiKey || !workouts.length) return;
+    const unknown = [...new Set(workouts.flatMap(w => w.exercises.map(e => e.name)))].filter(n => !isKnownExercise(n) && !asked.current.has(n));
+    if (!unknown.length) return;
+    unknown.forEach(n => asked.current.add(n));
+    classifyExercises({ uid, key: settings.geminiKey, model: settings.geminiModel, names: unknown }).catch(() => {});
+  }, [workouts, exMap, settings.geminiKey]);
   const ma = useMemo(() => withMA(meas), [meas]);
   const bwAt = date => { const p = ma.filter(m => m.date <= date); return p.length ? p.at(-1).ma : ma[0]?.ma ?? null; };
   const stats = useMemo(() => exerciseStats(norm, bwAt), [norm, ma]);

@@ -11,6 +11,19 @@ import { importHealthCSV, syncSheets } from '../lib/health';
 const Field = ({ label, children }) => <label style={{ display: 'block' }}><div className="lbl" style={{ marginBottom: 3 }}>{label}</div>{children}</label>;
 const N = ({ v, set }) => <input inputMode="decimal" value={v ?? ''} onChange={e => set(e.target.value === '' ? '' : e.target.value)} />;
 
+const MUSCLE_LIST = ['Chest', 'Back', 'Shoulders', 'Biceps', 'Triceps', 'Forearms', 'Quads', 'Hamstrings & glutes', 'Calves', 'Core', 'Neck'];
+function ExerciseRow({ x, uid }) {
+  const save = o => put(uid, 'exercises', x.id, { ...x, ...o, source: 'user' });
+  const sec = x.secondary || [];
+  return <div style={{ padding: '6px 0', fontSize: 13, borderTop: '1px solid #1e293b' }}>
+    <div className="row sp"><b>{x.name}</b><span><span className="dim" style={{ fontSize: 12 }}>{x.source === 'ai' ? 'AI' : 'you'} </span><button className="sm" onClick={() => remove(uid, 'exercises', x.id)}>×</button></span></div>
+    <div className="row" style={{ gap: 6, marginTop: 4 }}><span className="dim" style={{ fontSize: 12 }}>Primary</span>
+      <select value={x.primary} onChange={e => save({ primary: e.target.value, secondary: sec.filter(m => m !== e.target.value) })} style={{ width: 'auto' }}>{MUSCLE_LIST.map(m => <option key={m}>{m}</option>)}</select></div>
+    <div className="row" style={{ gap: 4, marginTop: 4, flexWrap: 'wrap' }}><span className="dim" style={{ fontSize: 12 }}>Secondary</span>
+      {MUSCLE_LIST.filter(m => m !== x.primary).map(m => <button key={m} className={sec.includes(m) ? 'sm pri' : 'sm'} onClick={() => save({ secondary: sec.includes(m) ? sec.filter(y => y !== m) : [...sec, m] })}>{m}</button>)}</div>
+  </div>;
+}
+
 function ProductRow({ p, uid }) {
   const [edit, setEdit] = useState(false);
   const base = p.per100 || p.perPiece; const unit = p.per100 ? '/100 g' : '/piece';
@@ -27,6 +40,7 @@ function ProductRow({ p, uid }) {
 export default function Settings({ uid, settings, user, onSignOut }) {
   const [d, setD] = useState(settings);
   const products = useCollection(uid, 'products');
+  const exMap = useCollection(uid, 'exercises');
   const [saved, setSaved] = useState('');
   const [msg, setMsg] = useState('');
   const [keyMsg, setKeyMsg] = useState('');
@@ -186,6 +200,13 @@ export default function Settings({ uid, settings, user, onSignOut }) {
         <label className="row" style={{ gap: 8, marginBottom: 8 }}><input type="checkbox" style={{ width: 'auto' }} checked={settings.lookupProducts !== false} onChange={e => saveSettings(uid, { lookupProducts: e.target.checked })} /> Look up branded products online</label>
         {[...products].sort((a, b) => a.name.localeCompare(b.name)).map(p => <ProductRow key={p.id} p={p} uid={uid} />)}
         {!products.length && <div className="dim">Nothing saved yet.</div>}
+      </div>
+
+      <div className="card">
+        <h3 style={{ marginBottom: 4 }}>Exercise muscles</h3>
+        <div className="dim" style={{ fontSize: 12, marginBottom: 6 }}>New exercises that the app doesn't recognise are classified once by the AI (primary and secondary muscles) when you open Training. Fix any that are wrong here; secondary muscles count at half volume.</div>
+        {[...exMap].sort((a, b) => a.name.localeCompare(b.name)).map(x => <ExerciseRow key={x.id} x={x} uid={uid} />)}
+        {!exMap.length && <div className="dim">Nothing yet – all your exercises are recognised.</div>}
       </div>
 
       <div className="card">
