@@ -14,14 +14,15 @@ const Bar = ({ v, color = 'var(--green)' }) => (
 );
 
 // Recovery bar: orange = rest left, green = rest done; fully green when the muscle is ready again.
-function Cooldown({ c, now }) {
+const daysTxt = h => { const d = Math.round(h / 24 * 10) / 10; return `${d} ${d === 1 ? 'day' : 'days'}`; };
+function Cooldown({ c, now, hours }) {
   const left = c.readyAt - now, ready = left <= 0;
   const h = Math.ceil(left / 3600e3);
   const v = ready ? 1 : (now - c.from) / (c.readyAt - c.from || 1);
   const col = ready ? 'var(--green)' : 'var(--amber)';
   return <div style={{ marginTop: 4 }}>
     <div className="row sp" style={{ fontSize: 12, marginBottom: 2 }}><span className="dim">Recovery</span>
-      <b style={{ color: col }}>{ready ? '✓ Ready' : `ready in ${h >= 24 ? `${Math.floor(h / 24)} d ${h % 24} h` : `${h} h`}`}</b></div>
+      <span><b style={{ color: col }}>{ready ? '✓ Ready!' : `ready in ${h >= 24 ? `${Math.floor(h / 24)} d ${h % 24} h` : `${h} h`}`}</b> <span className="dim">({ready ? `${daysTxt(hours)} recovery time` : `of ${daysTxt(hours)}`})</span></span></div>
     <div style={{ height: 6, background: 'var(--amber)', borderRadius: 3, overflow: 'hidden' }}><div style={{ width: Math.max(3, Math.min(1, v) * 100) + '%', height: '100%', background: 'var(--green)' }} /></div>
   </div>;
 }
@@ -42,13 +43,13 @@ function Week({ workouts, bwAt, today, priority, recovery }) {
         <div className="card stat" style={{ marginBottom: 0 }}><div className="lbl">Hard sets</div><div className="v">{w.sets}</div><div className="s">prev 7 days {w.prevSets}</div></div>
       </div>
       <div className="dim" style={{ fontSize: 12 }}>Sorted by your priority. First bar: volume vs prev 7 days. Second bar: recovery (times editable in Settings).</div>
-      {names.map(m => {
+      {names.map((m, i) => {
         const n = w.now[m] || 0, p = w.prev[m] || 0, d = last[m] ? daysBetween(last[m], today) : null;
-        return <div key={m} style={{ margin: '6px 0' }}>
-          <div className="row sp" style={{ fontSize: 13 }}><span>{m} <span className="dim">· {recoveryHours(recovery, m)} h</span></span>
+        return <div key={m} style={{ padding: '10px 0', borderTop: i ? '1px solid #1e293b' : 'none' }}>
+          <div className="row sp" style={{ fontSize: 13 }}><b>{m}</b>
             <span className="mute">{n ? kgFmt(n) : d != null && d <= wk - 1 ? '' : 'not yet'} <span className="dim">/ {p ? kgFmt(p) : '–'} prev 7d</span></span></div>
           <Bar v={p ? n / p : n ? 1 : 0} color={n >= p && n ? 'var(--green)' : 'var(--blue)'} />
-          {cool[m] && <Cooldown c={cool[m]} now={now} />}
+          {cool[m] && <Cooldown c={cool[m]} now={now} hours={recoveryHours(recovery, m)} />}
         </div>;
       })}
       {neg.length > 0 && <div style={{ marginTop: 10, fontSize: 13 }}>
