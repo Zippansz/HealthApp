@@ -13,7 +13,7 @@ const Bar = ({ v, color = 'var(--green)' }) => (
   </div>
 );
 
-// Recovery bar: fills up from the last session; full and green when the muscle is ready again.
+// Recovery bar: orange = rest left, green = rest done; fully green when the muscle is ready again.
 function Cooldown({ c, now }) {
   const left = c.readyAt - now, ready = left <= 0;
   const h = Math.ceil(left / 3600e3);
@@ -22,7 +22,7 @@ function Cooldown({ c, now }) {
   return <div style={{ marginTop: 4 }}>
     <div className="row sp" style={{ fontSize: 12, marginBottom: 2 }}><span className="dim">Recovery</span>
       <b style={{ color: col }}>{ready ? '✓ Ready' : `ready in ${h >= 24 ? `${Math.floor(h / 24)} d ${h % 24} h` : `${h} h`}`}</b></div>
-    <div style={{ height: 6, background: '#1e293b', borderRadius: 3, overflow: 'hidden' }}><div style={{ width: Math.max(3, Math.min(1, v) * 100) + '%', height: '100%', background: col }} /></div>
+    <div style={{ height: 6, background: 'var(--amber)', borderRadius: 3, overflow: 'hidden' }}><div style={{ width: Math.max(3, Math.min(1, v) * 100) + '%', height: '100%', background: 'var(--green)' }} /></div>
   </div>;
 }
 
