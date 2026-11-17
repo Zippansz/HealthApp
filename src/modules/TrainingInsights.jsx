@@ -13,15 +13,16 @@ const Bar = ({ v, color = 'var(--green)' }) => (
   </div>
 );
 
-// Thin recovery bar: fills up from the last session until the muscle is ready again.
+// Recovery bar: fills up from the last session; full and green when the muscle is ready again.
 function Cooldown({ c, now }) {
-  const left = c.readyAt - now;
-  if (left <= 0) return <div className="row sp" style={{ fontSize: 12, marginTop: 3 }}><span style={{ color: 'var(--green)' }}>✓ Ready</span></div>;
+  const left = c.readyAt - now, ready = left <= 0;
   const h = Math.ceil(left / 3600e3);
-  const v = (now - c.from) / (c.readyAt - c.from || 1);
-  return <div style={{ marginTop: 3 }}>
-    <div style={{ height: 4, background: '#1e293b', borderRadius: 2, overflow: 'hidden' }}><div style={{ width: Math.max(2, Math.min(1, v) * 100) + '%', height: '100%', background: 'var(--amber)' }} /></div>
-    <div style={{ fontSize: 12, color: 'var(--amber)', marginTop: 2 }}>ready in {h >= 24 ? `${Math.floor(h / 24)} d ${h % 24} h` : `${h} h`}</div>
+  const v = ready ? 1 : (now - c.from) / (c.readyAt - c.from || 1);
+  const col = ready ? 'var(--green)' : 'var(--amber)';
+  return <div style={{ marginTop: 4 }}>
+    <div className="row sp" style={{ fontSize: 12, marginBottom: 2 }}><span className="dim">Recovery</span>
+      <b style={{ color: col }}>{ready ? '✓ Ready' : `ready in ${h >= 24 ? `${Math.floor(h / 24)} d ${h % 24} h` : `${h} h`}`}</b></div>
+    <div style={{ height: 6, background: '#1e293b', borderRadius: 3, overflow: 'hidden' }}><div style={{ width: Math.max(3, Math.min(1, v) * 100) + '%', height: '100%', background: col }} /></div>
   </div>;
 }
 
@@ -40,7 +41,7 @@ function Week({ workouts, bwAt, today, priority, recovery }) {
         <div className="card stat" style={{ marginBottom: 0 }}><div className="lbl">Sessions</div><div className="v">{w.days}</div><div className="s">prev 7 days {w.prevDays}</div></div>
         <div className="card stat" style={{ marginBottom: 0 }}><div className="lbl">Hard sets</div><div className="v">{w.sets}</div><div className="s">prev 7 days {w.prevSets}</div></div>
       </div>
-      <div className="dim" style={{ fontSize: 12 }}>Sorted by your priority. Top bar: volume vs prev 7 days. Thin bar: recovery (times editable in Settings).</div>
+      <div className="dim" style={{ fontSize: 12 }}>Sorted by your priority. First bar: volume vs prev 7 days. Second bar: recovery (times editable in Settings).</div>
       {names.map(m => {
         const n = w.now[m] || 0, p = w.prev[m] || 0, d = last[m] ? daysBetween(last[m], today) : null;
         return <div key={m} style={{ margin: '6px 0' }}>
