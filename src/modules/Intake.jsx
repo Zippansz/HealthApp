@@ -44,7 +44,7 @@ function Meter({ label, val, min, max, unit = '', band = false, under = 'var(--b
     ? (val > max ? 'var(--red)' : val >= 0.9 * max ? 'var(--amber)' : val >= 0.5 * max ? 'var(--green)' : 'var(--blue)')
     : max == null && min != null
       ? (val >= min ? 'var(--green)' : 'var(--amber)')
-      : over ? 'var(--red)' : min != null && val >= min ? 'var(--green)' : bulk && min != null ? 'var(--amber)' : 'var(--blue)';   // bulking: orange until the calorie range is reached
+      : over ? 'var(--red)' : min != null && val >= min ? 'var(--green)' : 'var(--blue)';
   return (
     <div style={{ marginBottom: 10 }}>
       <div className="row sp" style={{ fontSize: 13 }}><span className="mute">{label}</span>
@@ -224,7 +224,7 @@ export default function Intake({ uid, settings }) {
             {Object.entries(settings.modes).map(([k, m]) => <option key={k} value={k}>{m.label}</option>)}
           </select>
         </div>
-        <Meter label="Calories" val={tot.kcal} min={mode.kcalMin} max={mode.kcalMax} unit=" kcal" bulk={carbsMin} />
+        <Meter label="Calories" val={tot.kcal} min={mode.kcalMin} max={mode.kcalMax} unit=" kcal" under={(modeKey || phase?.mode) === 'bulking' ? 'var(--amber)' : 'var(--blue)'} />
         <Meter label="Protein" val={tot.p} min={mode.p} unit=" g" band />
         <Meter label="Fat" val={tot.f} max={mode.fMax} unit=" g" />
         <Meter label="Carbs" val={tot.c} {...carbRange(mode)} unit=" g" under="var(--amber)" />

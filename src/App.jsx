@@ -11,6 +11,20 @@ import Settings from './modules/Settings';
 
 const TABS = [['measure', 'Measure'], ['intake', 'Intake'], ['train', 'Training'], ['settings', 'Settings']];
 
+// If a tab crashes, show the error here (and keep the tab bar) instead of a black screen.
+class Boundary extends React.Component {
+  state = { err: null };
+  static getDerivedStateFromError(err) { return { err }; }
+  componentDidUpdate(prev) { if (prev.tab !== this.props.tab && this.state.err) this.setState({ err: null }); }
+  render() {
+    if (!this.state.err) return this.props.children;
+    return <div className="card"><h3 style={{ marginBottom: 6 }}>Something broke on this tab</h3>
+      <div className="msg r" style={{ wordBreak: 'break-word' }}>{String(this.state.err.message || this.state.err)}</div>
+      <div className="dim" style={{ fontSize: 12, margin: '8px 0' }}>Switch to another tab, or reload. Send me this message and I'll fix it.</div>
+      <button onClick={() => location.reload()}>Reload</button></div>;
+  }
+}
+
 export default function App() {
   const [user, setUser] = useState(undefined);
   const [tab, setTab] = useState(() => { try { return localStorage.getItem('tab') || 'measure'; } catch { return 'measure'; } });
@@ -49,12 +63,12 @@ export default function App() {
   const props = { uid: user.uid, settings };
   return (
     <>
-      <div className="wrap">
+      <div className="wrap"><Boundary tab={tab}>
         {tab === 'measure' && <Measurements {...props} />}
         {tab === 'intake' && <Intake {...props} />}
         {tab === 'train' && <Training {...props} />}
         {tab === 'settings' && <Settings {...props} user={user} onSignOut={() => signOut(auth)} />}
-      </div>
+      </Boundary></div>
       <nav className="tabs">{TABS.map(([k, l]) => <button key={k} className={tab === k ? 'on' : ''} onClick={() => go(k)}>{l}</button>)}</nav>
     </>
   );
