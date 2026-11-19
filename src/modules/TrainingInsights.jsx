@@ -42,11 +42,12 @@ function Week({ workouts, bwAt, today, priority, recovery }) {
         <div className="card stat" style={{ marginBottom: 0 }}><div className="lbl">Sessions</div><div className="v">{w.days}</div><div className="s">prev 7 days {w.prevDays}</div></div>
         <div className="card stat" style={{ marginBottom: 0 }}><div className="lbl">Hard sets</div><div className="v">{w.sets}</div><div className="s">prev 7 days {w.prevSets}</div></div>
       </div>
-      <div className="dim" style={{ fontSize: 12 }}>Sorted by your priority. First bar: volume vs prev 7 days. Second bar: recovery (times editable in Settings).</div>
+      <div className="dim" style={{ fontSize: 12 }}>Sorted by your priority. Sets = hard sets in the last 7 days (secondary muscles count half). First bar: volume vs prev 7 days. Second bar: recovery (times editable in Settings).</div>
       {names.map((m, i) => {
         const n = w.now[m] || 0, p = w.prev[m] || 0, d = last[m] ? daysBetween(last[m], today) : null;
+        const sn = w.setsNow[m] || 0, sp = w.setsPrev[m] || 0, st = x => String(Math.round(x * 2) / 2);
         return <div key={m} style={{ padding: '10px 0', borderTop: i ? '1px solid #1e293b' : 'none' }}>
-          <div className="row sp" style={{ fontSize: 13 }}><b>{m}</b>
+          <div className="row sp" style={{ fontSize: 13 }}><span><b>{m}</b> <span style={{ color: sn ? 'var(--text)' : undefined }} className={sn ? '' : 'dim'}>{st(sn)} sets</span> <span className="dim">({st(sp)} prev)</span></span>
             <span className="mute">{n ? kgFmt(n) : d != null && d <= wk - 1 ? '' : 'not yet'} <span className="dim">/ {p ? kgFmt(p) : '–'} prev 7d</span></span></div>
           <Bar v={p ? n / p : n ? 1 : 0} color={n >= p && n ? 'var(--green)' : 'var(--blue)'} />
           {cool[m] && <Cooldown c={cool[m]} now={now} hours={recoveryHours(recovery, m)} />}

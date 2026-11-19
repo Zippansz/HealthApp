@@ -80,6 +80,19 @@ export function volumeByMuscle(workouts, from, to, bwAt = () => null) {
   return v;
 }
 
+// Hard sets per muscle between two dates: 1 set for the primary muscle, half a set for each secondary muscle.
+export function setsByMuscle(workouts, from, to) {
+  const v = {};
+  for (const w of workouts) {
+    if (w.date < from || w.date > to) continue;
+    for (const e of w.exercises) {
+      const n = hardSets(e).length; if (!n) continue;
+      for (const [m, wt] of muscleShares(e.name)) v[m] = (v[m] || 0) + n * wt;
+    }
+  }
+  return v;
+}
+
 export function lastTrained(workouts) {
   const last = {};
   for (const w of workouts) for (const e of w.exercises) {
@@ -118,6 +131,8 @@ export function weekSummary(workouts, today, bwAt) {
     sets: inWeek.reduce((a, w) => a + setsOf(w), 0),
     prevDays: workouts.filter(w => w.date >= prevStart && w.date <= prevEnd && setsOf(w) > 0).length,
     prevSets: workouts.filter(w => w.date >= prevStart && w.date <= prevEnd).reduce((a, w) => a + setsOf(w), 0),
+    setsNow: setsByMuscle(workouts, start, today),
+    setsPrev: setsByMuscle(workouts, prevStart, prevEnd),
     now: volumeByMuscle(workouts, start, today, bwAt),
     prev: volumeByMuscle(workouts, prevStart, prevEnd, bwAt),
   };
